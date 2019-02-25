@@ -3,6 +3,14 @@ module TileCollision exposing (..)
 import List.Extra
 
 
+{-| Too big, and the mob will stop on corners between square blockers
+Too small, gravity will sooner or later push the mob through the floor
+-}
+minimumDistance =
+    0.0001
+
+
+
 -- Types
 
 
@@ -35,7 +43,6 @@ type alias RelativeAabbTrajectory =
     , relativeEnd : Vec
     , halfWidth : Float
     , halfHeight : Float
-    , minimumDistance : Float
     }
 
 
@@ -44,7 +51,6 @@ type alias AbsoluteAabbTrajectory =
     , end : Vec
     , width : Float
     , height : Float
-    , minimumDistance : Float
     }
 
 
@@ -158,7 +164,6 @@ absoluteToRelativeTrajectory tile trajectory =
     , relativeEnd = tileSub tile trajectory.end
     , halfWidth = trajectory.width / 2
     , halfHeight = trajectory.height / 2
-    , minimumDistance = trajectory.minimumDistance
     }
 
 
@@ -222,7 +227,7 @@ recursiveCollide getCollider trajectory pairs =
                 recursiveCollide
                     getCollider
                     { trajectory
-                        --| start = collision.aabbPositionAtImpact
+                      --| start = collision.aabbPositionAtImpact
                         | end = collision.fix
                     }
                     (collision :: pairs)
@@ -317,7 +322,7 @@ makeTrajectory s e x =
 
 
 collideWhenXIncreases : TileCollider ()
-collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight, minimumDistance } =
+collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight } =
     let
         -- The actual X coordinate of the blocker respect to the tile center is -0.5
         blockX =
@@ -370,5 +375,3 @@ collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight, minim
                 , distanceSquared = distanceSquared relativeStart aabbPositionAtImpact
                 , tile = { row = 0, column = 0 }
                 }
-
-

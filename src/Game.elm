@@ -106,7 +106,6 @@ playerThink dt input player =
                 , height = playerSize.height
                 , start = Vec2.toRecord player.position
                 , end = Vec2.toRecord idealPosition
-                , minimumDistance = 0.0001
                 }
 
         fixedPosition =
