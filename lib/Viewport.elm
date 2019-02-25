@@ -1,4 +1,16 @@
-module Viewport exposing (..)
+module Viewport
+    exposing
+        ( PixelPosition
+        , PixelSize
+        , WorldPosition
+        , WorldSize
+        , getWindowSize
+        , onWindowResize
+        , pixelToWorld
+        , toFullWindowHtml
+        , worldToCameraTransform
+        , worldToPixel
+        )
 
 import Browser.Dom
 import Browser.Events
@@ -37,27 +49,6 @@ type alias WorldPosition =
     }
 
 
-
--- Window getters
-
-
-getWindowSize : (PixelSize -> msg) -> Cmd msg
-getWindowSize msgConstructor =
-    let
-        viewportToMsg viewport =
-            msgConstructor
-                { width = floor viewport.viewport.width
-                , height = floor viewport.viewport.height
-                }
-    in
-    Task.perform viewportToMsg Browser.Dom.getViewport
-
-
-onWindowResize : (PixelSize -> msg) -> Sub msg
-onWindowResize msgConstructor =
-    Browser.Events.onResize (\w h -> msgConstructor { width = w, height = h })
-
-
 {-| Find the scaling factors that ensure that a given world size will be entirely
 contained in the pixel space
 -}
@@ -85,8 +76,8 @@ pixelToWorld pixelSize minimumVisibleWorldSize pixelPosition =
         scale =
             worldToPixelScale pixelSize minimumVisibleWorldSize
     in
-    { x = toFloat pixelX * scale
-    , y = toFloat pixelY * scale
+    { x = toFloat pixelX / scale
+    , y = toFloat pixelY / scale
     }
 
 
@@ -97,10 +88,10 @@ worldToPixel pixelSize minimumVisibleWorldSize worldPosition =
             worldToPixelScale pixelSize minimumVisibleWorldSize
 
         pixelX =
-            worldPosition.x / scale
+            worldPosition.x * scale
 
         pixelY =
-            worldPosition.y / scale
+            worldPosition.y * scale
     in
     { left = floor pixelX + pixelSize.width // 2
     , top = 1 - floor pixelY + pixelSize.height // 2
@@ -123,7 +114,24 @@ worldToCameraTransform pixelSize minimumVisibleWorldSize =
 
 
 
--- DOM element
+-- Full Window stuff
+
+
+getWindowSize : (PixelSize -> msg) -> Cmd msg
+getWindowSize msgConstructor =
+    let
+        viewportToMsg viewport =
+            msgConstructor
+                { width = floor viewport.viewport.width
+                , height = floor viewport.viewport.height
+                }
+    in
+    Task.perform viewportToMsg Browser.Dom.getViewport
+
+
+onWindowResize : (PixelSize -> msg) -> Sub msg
+onWindowResize msgConstructor =
+    Browser.Events.onResize (\w h -> msgConstructor { width = w, height = h })
 
 
 toFullWindowHtml : PixelSize -> List WebGL.Entity -> Html a

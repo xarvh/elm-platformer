@@ -33,6 +33,7 @@ type alias Model =
     , keys : List Keyboard.Key
     , pause : Bool
     , collisions : List (TileCollision.Collision Map.SquareBlocker)
+    , mousePosition : PixelPosition
     }
 
 
@@ -40,6 +41,16 @@ type Msg
     = OnResize PixelSize
     | OnAnimationFrame Float
     | OnKey Keyboard.Msg
+    | OnMouseMove PixelPosition
+
+
+
+-- Globals
+
+visibleWorldSize =
+          { width = 2
+          , height = 6
+          }
 
 
 
@@ -59,6 +70,7 @@ init flags =
             , keys = []
             , pause = False
             , collisions = []
+            , mousePosition = { top = 0, left = 0 }
             }
 
         cmd =
@@ -89,6 +101,17 @@ update msg model =
             in
             { model | keys = keys }
                 |> updateOnKeyChange maybeKeyChange
+
+        OnMouseMove position ->
+          let
+              worldPos = Viewport.pixelToWorld model.viewportSize visibleWorldSize position
+
+              backSize = Viewport.worldToPixel model.viewportSize visibleWorldSize worldPos
+
+              --q = Debug.log "" { world = worldPos, pixel = backSize, actual = position }
+
+          in
+           noCmd { model | mousePosition = position }
 
         OnAnimationFrame dtInMilliseconds ->
             let
@@ -142,12 +165,6 @@ updateOnKeyChange maybeKeyChange model =
 view : Model -> Browser.Document Msg
 view model =
     let
-        visibleWorldSize =
-          { width = 20
-          , height = 1
-          }
-
-
         entities =
             Scene.entities
                 { cameraToViewport = Viewport.worldToCameraTransform model.viewportSize visibleWorldSize
@@ -185,7 +202,7 @@ subscriptions model =
             Browser.Events.onAnimationFrameDelta OnAnimationFrame
         , Keyboard.subscriptions |> Sub.map OnKey
 
-        --, Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
+        , Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
         --, Browser.Events.onClick (Json.Decode.succeed OnMouseClick)
         ]
 
