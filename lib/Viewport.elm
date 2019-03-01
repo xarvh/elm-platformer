@@ -22,6 +22,17 @@ import Task
 import WebGL
 
 
+{-| TODO add:
+
+          viewportInWorldCoordinates : PixelSize -> WorldSize -> WorldPosition -> (WorldPosition, WorldPosition)
+
+    Tutte le funzioni prendono `PixelSize -> WorldSize ->` avrebbe senso metterle assieme?
+
+          type alias Viewport = { pixelSize : PixelSize, minimumVisibleWorldSize : WorldSize }
+-}
+
+
+
 -- Types
 
 

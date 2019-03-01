@@ -14,18 +14,13 @@ type alias Transform =
     }
 
 
-type alias Entity =
-    WebGL.Entity
+type alias MatToEntity =
+    Mat4 -> WebGL.Entity
 
 
 type Node
-    = Ent (Mat4 -> Entity)
+    = Ent MatToEntity
     | Nod (List Transform) (List Node)
-
-
-treeToEntities : Mat4 -> Node -> List ( Mat4, Entity )
-treeToEntities worldToCamera node =
-    recursiveTreeToEntities node worldToCamera []
 
 
 applyTransform : Transform -> Mat4 -> Mat4
@@ -35,18 +30,18 @@ applyTransform t mat =
         |> Mat4.rotate t.rotate (vec3 0 0 -1)
 
 
-recursiveTreeToEntities : Node -> Mat4 -> List ( Mat4, Entity ) -> List ( Mat4, Entity )
-recursiveTreeToEntities node transformSoFar entitiesSoFar =
+appendTreeToEntities : Mat4 -> Node -> List WebGL.Entity -> List WebGL.Entity
+appendTreeToEntities transformSoFar node entitiesSoFar =
     case node of
         Ent matToEntity ->
-            ( transformSoFar, matToEntity transformSoFar ) :: entitiesSoFar
+            matToEntity transformSoFar :: entitiesSoFar
 
         Nod transforms children ->
             let
                 newTransform =
                     List.foldl applyTransform transformSoFar transforms
             in
-            List.foldr (\child enli -> recursiveTreeToEntities child newTransform enli) entitiesSoFar children
+            List.foldr (\child enli -> appendTreeToEntities newTransform child enli) entitiesSoFar children
 
 
 translate : Vec2 -> Transform

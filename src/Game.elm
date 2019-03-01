@@ -1,7 +1,8 @@
 module Game exposing (..)
 
+import Assets.Tiles
 import Dict exposing (Dict)
-import Map exposing (Delta(..), SquareBlocker(..))
+import Map
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import TileCollision
     exposing
@@ -62,18 +63,14 @@ type alias Player =
 
 playerInit : Player
 playerInit =
-    --{ position = vec2 -2.211749543059631 0.012178343439440242
-    { position = vec2 -2 1
-    , speed = vec2 -2.586545688407802 -1.3333333039685646
+    { position = vec2 10 10
+    , speed = vec2 0 0
     }
 
 
-playerThink : Float -> { x : Int, y : Int } -> Player -> ( Player, List (Collision SquareBlocker) )
+playerThink : Float -> { x : Int, y : Int } -> Player -> ( Player, List (Collision Assets.Tiles.SquareCollider) )
 playerThink dt input player =
     let
---         input =
---             { x = -1, y = 0 }
-
         movementAcceleration =
             vec2 (toFloat input.x * baseAcceleration) (toFloat input.y * baseAcceleration)
 
@@ -101,7 +98,7 @@ playerThink dt input player =
 
         collisions =
             TileCollision.collide
-                Map.tileAsCollider
+                (Map.getTileType >> .collider)
                 { width = playerSize.width
                 , height = playerSize.height
                 , start = Vec2.toRecord player.position
@@ -124,25 +121,22 @@ playerThink dt input player =
     )
 
 
-fixSpeed : a -> List (Collision SquareBlocker) -> Vec2 -> Vec2
+{-| TODO move this in Assets.Tiles? -}
+fixSpeed : a -> List (Collision Assets.Tiles.SquareCollider) -> Vec2 -> Vec2
 fixSpeed a collisions speed =
     let
         sp collision ( x, y ) =
             case collision.geometry of
-                X Increases ->
+                Assets.Tiles.X Assets.Tiles.Increases ->
                     ( min 0 x, y )
 
-                X Decreases ->
-                    let
-                        q =
-                            List.map (Debug.log "") collisions -- ( a, collisions, speed )
-                    in
+                Assets.Tiles.X Assets.Tiles.Decreases ->
                     ( max 0 x, y )
 
-                Y Increases ->
+                Assets.Tiles.Y Assets.Tiles.Increases ->
                     ( x, min 0 y )
 
-                Y Decreases ->
+                Assets.Tiles.Y Assets.Tiles.Decreases ->
                     ( x, max 0 y )
 
         ( xx, yy ) =

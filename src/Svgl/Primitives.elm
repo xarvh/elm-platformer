@@ -105,7 +105,7 @@ quadVertexShader =
         varying vec2 localPosition;
 
         void main () {
-            localPosition = (dimensions + strokeWidth * 2.0) * position;
+            localPosition = dimensions * position; //(dimensions + strokeWidth * 2.0) * position;
             gl_Position = entityToCamera * vec4(localPosition, 0, 1);
         }
     |]

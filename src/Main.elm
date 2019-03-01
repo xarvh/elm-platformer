@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Assets.Tiles
 import Browser
 import Browser.Events
 import Game
@@ -32,7 +33,7 @@ type alias Model =
     , player : Game.Player
     , keys : List Keyboard.Key
     , pause : Bool
-    , collisions : List (TileCollision.Collision Map.SquareBlocker)
+    , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
     , mousePosition : PixelPosition
     }
 
@@ -47,10 +48,11 @@ type Msg
 
 -- Globals
 
+
 visibleWorldSize =
-          { width = 2
-          , height = 6
-          }
+    { width = 20
+    , height = 20
+    }
 
 
 
@@ -103,15 +105,16 @@ update msg model =
                 |> updateOnKeyChange maybeKeyChange
 
         OnMouseMove position ->
-          let
-              worldPos = Viewport.pixelToWorld model.viewportSize visibleWorldSize position
+            let
+                worldPos =
+                    Viewport.pixelToWorld model.viewportSize visibleWorldSize position
 
-              backSize = Viewport.worldToPixel model.viewportSize visibleWorldSize worldPos
+                backSize =
+                    Viewport.worldToPixel model.viewportSize visibleWorldSize worldPos
 
-              --q = Debug.log "" { world = worldPos, pixel = backSize, actual = position }
-
-          in
-           noCmd { model | mousePosition = position }
+                --q = Debug.log "" { world = worldPos, pixel = backSize, actual = position }
+            in
+            noCmd { model | mousePosition = position }
 
         OnAnimationFrame dtInMilliseconds ->
             let
@@ -119,14 +122,16 @@ update msg model =
                 dt =
                     dtInMilliseconds / 1000
 
-                (player, collisions) =
+                ( player, collisions ) =
                     Game.playerThink dt (Keyboard.Arrows.arrows model.keys) model.player
 
-                pause = Vec2.getX player.speed == 0
+                pause =
+                    Vec2.getX player.speed == 0
             in
             noCmd
                 { model
                     | currentTimeInSeconds = model.currentTimeInSeconds + dt
+
                     --, pause = pause
                     , player = player
                     , collisions = collisions
@@ -201,8 +206,8 @@ subscriptions model =
           else
             Browser.Events.onAnimationFrameDelta OnAnimationFrame
         , Keyboard.subscriptions |> Sub.map OnKey
-
         , Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
+
         --, Browser.Events.onClick (Json.Decode.succeed OnMouseClick)
         ]
 
