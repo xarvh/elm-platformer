@@ -331,7 +331,7 @@ collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight } =
     if relativeStart.x >= relativeEnd.x then
         -- If movement is not left to right, no point in continuing
         Nothing
-    else if relativeStart.x + halfWidth >= blockX then
+    else if relativeStart.x + halfWidth >= blockX + 0.01 then
         -- The AABB is already past the block, so it should pass
         Nothing
     else if relativeEnd.x + halfWidth <= blockX then

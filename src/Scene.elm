@@ -61,7 +61,7 @@ entities { cameraToViewport, time, player, collisions } =
                 |> List.concat
 
         playerEntity =
-            [ mob worldToViewport player.position (vec3 1 0 0)
+            [ mob worldToViewport player.position (vec3 0 1 0)
             ]
 
         collisionEntities =
