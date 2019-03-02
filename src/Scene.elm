@@ -1,8 +1,11 @@
 module Scene exposing (..)
 
+import Assets.DemoLevel
+import Assets.Tiles
 import Circle
 import Dict exposing (Dict)
 import Game exposing (..)
+import List.Extra
 import Map
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
@@ -11,7 +14,9 @@ import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Obstacle
 import Quad
 import Set exposing (Set)
-import TileCollision
+import Svgl.Primitives exposing (defaultUniforms, rect)
+import Svgl.Tree exposing (..)
+import TileCollision exposing (RowColumn)
 import WebGL exposing (Entity, Mesh, Shader)
 
 
@@ -36,12 +41,34 @@ periodHarmonic time phase period =
 
 
 
+-- Hack, delete me
+
+
+allRowColumns : List RowColumn
+allRowColumns =
+    let
+        listToRowColumn l =
+            case l of
+                [ column, row ] ->
+                    { column = column, row = row }
+
+                _ ->
+                    Debug.todo "blerch"
+    in
+    List.Extra.cartesianProduct
+        [ List.range 0 (Assets.DemoLevel.width - 1)
+        , List.range 0 (Assets.DemoLevel.height - 1)
+        ]
+        |> List.map listToRowColumn
+
+
+
 -- Entities
 
 
 type alias EntitiesArgs =
     { cameraToViewport : Mat4
-    , collisions : List (TileCollision.Collision Map.SquareBlocker)
+    , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
     , time : Float
     , player : Game.Player
     }
@@ -52,13 +79,12 @@ entities { cameraToViewport, time, player, collisions } =
     let
         worldToViewport =
             cameraToViewport
+                |> Mat4.translate3 -15 -15 0
 
-        --|> Mat4.scale3 (1 / Map.worldSize) (1 / Map.worldSize) 1
-        blockers =
-            Map.tilemap
-                |> Dict.toList
-                |> List.map (obstacleToEntity worldToViewport)
-                |> List.concat
+        tilesTree =
+            allRowColumns
+                |> List.map renderTile
+                |> Svgl.Tree.Nod []
 
         playerEntity =
             [ mob worldToViewport player.position (vec3 0 1 0)
@@ -66,10 +92,10 @@ entities { cameraToViewport, time, player, collisions } =
 
         collisionEntities =
             List.indexedMap (viewCollision worldToViewport) collisions
-              |> List.concat
+                |> List.concat
     in
     List.concat
-        [ blockers
+        [ Svgl.Tree.appendTreeToEntities worldToViewport tilesTree []
         , playerEntity
         , collisionEntities
         ]
@@ -103,56 +129,29 @@ dot worldToViewport position size color =
     Circle.entity entityToViewport color
 
 
-viewCollision : Mat4 -> Int -> TileCollision.Collision Map.SquareBlocker -> List Entity
+viewCollision : Mat4 -> Int -> TileCollision.Collision Assets.Tiles.SquareCollider -> List Entity
 viewCollision worldToViewport index collision =
-  let
-      color =case index of
-        0 -> vec3 1 0 0
-        1 -> vec3 0 1 0
-        _ -> vec3 0 0 1
+    let
+        color =
+            case index of
+                0 ->
+                    vec3 1 0 0
 
-  in
+                1 ->
+                    vec3 0 1 0
+
+                _ ->
+                    vec3 0 0 1
+    in
     [ dot worldToViewport (vec2 (toFloat collision.tile.column) (toFloat collision.tile.row)) 1.3 color
     , dot worldToViewport (Vec2.fromRecord collision.aabbPositionAtImpact) 1 color
---     , dot worldToViewport (Vec2.fromRecord collision.fix) 0.3 color
     ]
 
 
-
-{-
-   tileColor : Mat4 -> Tile -> Vec3 -> Entity
-   tileColor worldToViewport tile color =
-       let
-           { x, y } =
-               tile
-                   |> Map.tileCenter
-                   |> Vec2.toRecord
-
-           entityToViewport =
-               worldToViewport
-                   |> Mat4.translate3 x y 0
-       in
-       Quad.entity entityToViewport color
--}
-
-
-obstacleToEntity : Mat4 -> ( ( Int, Int ), Char ) -> List Entity
-obstacleToEntity worldToViewport ( ( x, y ), char ) =
-    let
-        sectorToEntity s =
-            worldToViewport
-                |> Mat4.translate3 (toFloat x) (toFloat y) 0
-                |> Mat4.rotate (s * pi / 2) (vec3 0 0 1)
-                |> Obstacle.entity
-    in
-    (case Map.tileAsChar { column = x, row = y } of
-        '#' ->
-            [ 0, 1, 2, 3 ]
-
-        '^' ->
-            [ 0 ]
-
-        _ ->
-            []
-    )
-        |> List.map sectorToEntity
+renderTile : RowColumn -> Node
+renderTile rowColumn =
+    Nod
+        [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row)
+        ]
+        [ (Map.getTileType rowColumn).render
+        ]
