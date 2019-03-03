@@ -15,8 +15,9 @@ import Obstacle
 import Quad
 import Set exposing (Set)
 import Svgl.Primitives exposing (defaultUniforms, rect)
-import Svgl.Tree exposing (..)
+import Svgl.Tree exposing (SvglNode, ellipse, rect)
 import TileCollision exposing (RowColumn)
+import TransformTree exposing (..)
 import WebGL exposing (Entity, Mesh, Shader)
 
 
@@ -84,7 +85,7 @@ entities { cameraToViewport, time, player, collisions } =
         tilesTree =
             allRowColumns
                 |> List.map renderTile
-                |> Svgl.Tree.Nod []
+                |> Nest []
 
         playerEntity =
             [ mob worldToViewport player.position (vec3 0 1 0)
@@ -95,7 +96,7 @@ entities { cameraToViewport, time, player, collisions } =
                 |> List.concat
     in
     List.concat
-        [ Svgl.Tree.appendTreeToEntities worldToViewport tilesTree []
+        [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToViewport tilesTree []
         , playerEntity
         , collisionEntities
         ]
@@ -148,9 +149,9 @@ viewCollision worldToViewport index collision =
     ]
 
 
-renderTile : RowColumn -> Node
+renderTile : RowColumn -> SvglNode
 renderTile rowColumn =
-    Nod
+    Nest
         [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row)
         ]
         [ (Map.getTileType rowColumn).render
