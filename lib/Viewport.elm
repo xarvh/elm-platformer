@@ -2,11 +2,14 @@ module Viewport
     exposing
         ( PixelPosition
         , PixelSize
+        , Viewport
         , WorldPosition
         , WorldSize
         , getWindowSize
         , onWindowResize
         , pixelToWorld
+        , setMinimumVisibleWorldSize
+        , setPixelSize
         , toFullWindowHtml
         , worldToCameraTransform
         , worldToPixel
@@ -17,7 +20,6 @@ import Browser.Events
 import Html exposing (Attribute, Html, div)
 import Html.Attributes exposing (style)
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Task
 import WebGL
 
@@ -26,9 +28,6 @@ import WebGL
 
           viewportInWorldCoordinates : PixelSize -> WorldSize -> WorldPosition -> (WorldPosition, WorldPosition)
 
-    Tutte le funzioni prendono `PixelSize -> WorldSize ->` avrebbe senso metterle assieme?
-
-          type alias Viewport = { pixelSize : PixelSize, minimumVisibleWorldSize : WorldSize }
 -}
 
 
@@ -60,11 +59,29 @@ type alias WorldPosition =
     }
 
 
+type alias Viewport =
+    { pixelSize : PixelSize
+    , minimumVisibleWorldSize : WorldSize
+    }
+
+
+{-| Helpers to make your life easier if you want to store a Viewport in your Model
+-}
+setPixelSize : PixelSize -> Viewport -> Viewport
+setPixelSize size viewport =
+    { viewport | pixelSize = size }
+
+
+setMinimumVisibleWorldSize : WorldSize -> Viewport -> Viewport
+setMinimumVisibleWorldSize size viewport =
+    { viewport | minimumVisibleWorldSize = size }
+
+
 {-| Find the scaling factors that ensure that a given world size will be entirely
 contained in the pixel space
 -}
-worldToPixelScale : PixelSize -> WorldSize -> Float
-worldToPixelScale pixelSize minimumVisibleWorldSize =
+worldToPixelScale : Viewport -> Float
+worldToPixelScale { pixelSize, minimumVisibleWorldSize } =
     let
         maxScaleX =
             toFloat pixelSize.width / minimumVisibleWorldSize.width
@@ -75,28 +92,28 @@ worldToPixelScale pixelSize minimumVisibleWorldSize =
     min maxScaleX maxScaleY
 
 
-pixelToWorld : PixelSize -> WorldSize -> PixelPosition -> WorldPosition
-pixelToWorld pixelSize minimumVisibleWorldSize pixelPosition =
+pixelToWorld : Viewport -> PixelPosition -> WorldPosition
+pixelToWorld viewport pixelPosition =
     let
         pixelX =
-            pixelPosition.left - pixelSize.width // 2
+            pixelPosition.left - viewport.pixelSize.width // 2
 
         pixelY =
-            1 - pixelPosition.top + pixelSize.height // 2
+            1 - pixelPosition.top + viewport.pixelSize.height // 2
 
         scale =
-            worldToPixelScale pixelSize minimumVisibleWorldSize
+            worldToPixelScale viewport
     in
     { x = toFloat pixelX / scale
     , y = toFloat pixelY / scale
     }
 
 
-worldToPixel : PixelSize -> WorldSize -> WorldPosition -> PixelPosition
-worldToPixel pixelSize minimumVisibleWorldSize worldPosition =
+worldToPixel : Viewport -> WorldPosition -> PixelPosition
+worldToPixel viewport worldPosition =
     let
         scale =
-            worldToPixelScale pixelSize minimumVisibleWorldSize
+            worldToPixelScale viewport
 
         pixelX =
             worldPosition.x * scale
@@ -104,24 +121,24 @@ worldToPixel pixelSize minimumVisibleWorldSize worldPosition =
         pixelY =
             worldPosition.y * scale
     in
-    { left = floor pixelX + pixelSize.width // 2
-    , top = 1 - floor pixelY + pixelSize.height // 2
+    { left = floor pixelX + viewport.pixelSize.width // 2
+    , top = 1 - floor pixelY + viewport.pixelSize.height // 2
     }
 
 
-worldToCameraTransform : PixelSize -> WorldSize -> Mat4
-worldToCameraTransform pixelSize minimumVisibleWorldSize =
+worldToCameraTransform : Viewport -> Mat4
+worldToCameraTransform viewport =
     let
         scale =
-            worldToPixelScale pixelSize minimumVisibleWorldSize
+            worldToPixelScale viewport
 
         scaleX =
-            2.0 * scale / toFloat pixelSize.width
+            2.0 * scale / toFloat viewport.pixelSize.width
 
         scaleY =
-            2.0 * scale / toFloat pixelSize.height
+            2.0 * scale / toFloat viewport.pixelSize.height
     in
-    Mat4.makeScale (vec3 scaleX scaleY 1)
+    Mat4.makeScale3 scaleX scaleY 1
 
 
 

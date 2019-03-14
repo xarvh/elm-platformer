@@ -16,7 +16,7 @@ import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Scene
 import TileCollision
 import Time exposing (Posix)
-import Viewport exposing (PixelPosition, PixelSize)
+import Viewport exposing (PixelPosition, PixelSize, Viewport)
 import WebGL
 
 
@@ -28,7 +28,7 @@ type alias Flags =
 
 
 type alias Model =
-    { viewportSize : PixelSize
+    { viewport : Viewport
     , currentTimeInSeconds : Float
     , player : Game.Player
     , keys : List Keyboard.Key
@@ -46,16 +46,6 @@ type Msg
 
 
 
--- Globals
-
-
-visibleWorldSize =
-    { width = 20
-    , height = 20
-    }
-
-
-
 -- Init
 
 
@@ -63,9 +53,15 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
         model =
-            { viewportSize =
-                { width = 640
-                , height = 480
+            { viewport =
+                { pixelSize =
+                    { width = 640
+                    , height = 480
+                    }
+                , minimumVisibleWorldSize =
+                    { width = 20
+                    , height = 20
+                    }
                 }
             , currentTimeInSeconds = 0
             , player = Game.playerInit
@@ -94,7 +90,8 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         OnResize size ->
-            noCmd { model | viewportSize = size }
+            { model | viewport = Viewport.setPixelSize size model.viewport }
+                |> noCmd
 
         OnKey keymsg ->
             let
@@ -105,16 +102,8 @@ update msg model =
                 |> updateOnKeyChange maybeKeyChange
 
         OnMouseMove position ->
-            let
-                worldPos =
-                    Viewport.pixelToWorld model.viewportSize visibleWorldSize position
-
-                backSize =
-                    Viewport.worldToPixel model.viewportSize visibleWorldSize worldPos
-
-                --q = Debug.log "" { world = worldPos, pixel = backSize, actual = position }
-            in
-            noCmd { model | mousePosition = position }
+            { model | mousePosition = position }
+                |> noCmd
 
         OnAnimationFrame dtInMilliseconds ->
             let
@@ -171,12 +160,12 @@ view : Model -> Browser.Document Msg
 view model =
     let
         playerPosition =
-          Vec2.toRecord model.player.position
+            Vec2.toRecord model.player.position
 
         entities =
             Scene.entities
                 { worldToCamera =
-                       Viewport.worldToCameraTransform model.viewportSize visibleWorldSize
+                    Viewport.worldToCameraTransform model.viewport
                         |> Mat4.translate3 -playerPosition.x -playerPosition.y 0
                 , player = model.player
                 , collisions = model.collisions
@@ -185,7 +174,7 @@ view model =
     in
     { title = "Generic platformer"
     , body =
-        [ Viewport.toFullWindowHtml model.viewportSize entities
+        [ Viewport.toFullWindowHtml model.viewport.pixelSize entities
         , Html.node "style" [] [ Html.text "body { margin: 0; }" ]
         ]
     }
