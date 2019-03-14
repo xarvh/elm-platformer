@@ -170,9 +170,14 @@ updateOnKeyChange maybeKeyChange model =
 view : Model -> Browser.Document Msg
 view model =
     let
+        playerPosition =
+          Vec2.toRecord model.player.position
+
         entities =
             Scene.entities
-                { cameraToViewport = Viewport.worldToCameraTransform model.viewportSize visibleWorldSize
+                { worldToCamera =
+                       Viewport.worldToCameraTransform model.viewportSize visibleWorldSize
+                        |> Mat4.translate3 -playerPosition.x -playerPosition.y 0
                 , player = model.player
                 , collisions = model.collisions
                 , time = model.currentTimeInSeconds

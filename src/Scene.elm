@@ -68,7 +68,7 @@ allRowColumns =
 
 
 type alias EntitiesArgs =
-    { cameraToViewport : Mat4
+    { worldToCamera : Mat4
     , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
     , time : Float
     , player : Game.Player
@@ -76,27 +76,23 @@ type alias EntitiesArgs =
 
 
 entities : EntitiesArgs -> List Entity
-entities { cameraToViewport, time, player, collisions } =
+entities { worldToCamera, time, player, collisions } =
     let
-        worldToViewport =
-            cameraToViewport
-                |> Mat4.translate3 -15 -15 0
-
         tilesTree =
             allRowColumns
                 |> List.map renderTile
                 |> Nest []
 
         playerEntity =
-            [ mob worldToViewport player.position (vec3 0 1 0)
+            [ mob worldToCamera player.position (vec3 0 1 0)
             ]
 
         collisionEntities =
-            List.indexedMap (viewCollision worldToViewport) collisions
+            List.indexedMap (viewCollision worldToCamera) collisions
                 |> List.concat
     in
     List.concat
-        [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToViewport tilesTree []
+        [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree []
         , playerEntity
         , collisionEntities
         ]
