@@ -16,7 +16,7 @@ import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Scene
 import TileCollision
 import Time exposing (Posix)
-import Viewport exposing (PixelPosition, PixelSize, Viewport)
+import Viewport
 import WebGL
 
 
@@ -28,21 +28,21 @@ type alias Flags =
 
 
 type alias Model =
-    { viewport : Viewport
+    { viewportSize : Viewport.PixelSize
+    , mousePosition : Viewport.PixelPosition
     , currentTimeInSeconds : Float
     , player : Game.Player
     , keys : List Keyboard.Key
     , pause : Bool
     , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
-    , mousePosition : PixelPosition
     }
 
 
 type Msg
-    = OnResize PixelSize
+    = OnResize Viewport.PixelSize
     | OnAnimationFrame Float
     | OnKey Keyboard.Msg
-    | OnMouseMove PixelPosition
+    | OnMouseMove Viewport.PixelPosition
 
 
 
@@ -53,15 +53,9 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
         model =
-            { viewport =
-                { pixelSize =
-                    { width = 640
-                    , height = 480
-                    }
-                , minimumVisibleWorldSize =
-                    { width = 20
-                    , height = 20
-                    }
+            { viewportSize =
+                { width = 640
+                , height = 480
                 }
             , currentTimeInSeconds = 0
             , player = Game.playerInit
@@ -90,7 +84,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         OnResize size ->
-            { model | viewport = Viewport.setPixelSize size model.viewport }
+            { model | viewportSize = size }
                 |> noCmd
 
         OnKey keymsg ->
@@ -159,14 +153,9 @@ updateOnKeyChange maybeKeyChange model =
 view : Model -> Browser.Document Msg
 view model =
     let
-        playerPosition =
-            Vec2.toRecord model.player.position
-
         entities =
             Scene.entities
-                { worldToCamera =
-                    Viewport.worldToCameraTransform model.viewport
-                        |> Mat4.translate3 -playerPosition.x -playerPosition.y 0
+                { viewportSize = model.viewportSize
                 , player = model.player
                 , collisions = model.collisions
                 , time = model.currentTimeInSeconds
@@ -174,7 +163,7 @@ view model =
     in
     { title = "Generic platformer"
     , body =
-        [ Viewport.toFullWindowHtml model.viewport.pixelSize entities
+        [ Viewport.toFullWindowHtml model.viewportSize entities
         , Html.node "style" [] [ Html.text "body { margin: 0; }" ]
         ]
     }
@@ -184,7 +173,7 @@ view model =
 -- Subscriptions
 
 
-mousePositionDecoder : Decoder PixelPosition
+mousePositionDecoder : Decoder Viewport.PixelPosition
 mousePositionDecoder =
     Json.Decode.map2 (\x y -> { left = x, top = y })
         (Json.Decode.field "clientX" Json.Decode.int)

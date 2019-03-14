@@ -18,6 +18,7 @@ import Svgl.Primitives exposing (defaultUniforms, rect)
 import Svgl.Tree exposing (SvglNode, ellipse, rect)
 import TileCollision exposing (RowColumn)
 import TransformTree exposing (..)
+import Viewport exposing (WorldPosition, WorldSize)
 import WebGL exposing (Entity, Mesh, Shader)
 
 
@@ -41,13 +42,22 @@ periodHarmonic time phase period =
     2 * pi * periodLinear time phase period |> sin
 
 
-
--- Hack, delete me
-
-
-allRowColumns : List RowColumn
-allRowColumns =
+visibleRowColumns : WorldPosition -> WorldSize -> List RowColumn
+visibleRowColumns { x, y } { width, height } =
     let
+        left =
+            x - width / 2 |> floor |> max 0
+
+        right =
+            x + width / 2 |> ceiling |> min (Assets.DemoLevel.width - 1)
+
+        top =
+            y + height / 2 |> ceiling |> min (Assets.DemoLevel.height - 1)
+
+        bottom =
+            y - height / 2 |> floor |> max 0
+
+        -- Hack, fix me
         listToRowColumn l =
             case l of
                 [ column, row ] ->
@@ -57,8 +67,8 @@ allRowColumns =
                     Debug.todo "blerch"
     in
     List.Extra.cartesianProduct
-        [ List.range 0 (Assets.DemoLevel.width - 1)
-        , List.range 0 (Assets.DemoLevel.height - 1)
+        [ List.range left right
+        , List.range bottom top
         ]
         |> List.map listToRowColumn
 
@@ -68,7 +78,7 @@ allRowColumns =
 
 
 type alias EntitiesArgs =
-    { worldToCamera : Mat4
+    { viewportSize : Viewport.PixelSize
     , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
     , time : Float
     , player : Game.Player
@@ -76,12 +86,32 @@ type alias EntitiesArgs =
 
 
 entities : EntitiesArgs -> List Entity
-entities { worldToCamera, time, player, collisions } =
+entities { viewportSize, time, player, collisions } =
     let
+        playerPosition =
+            Vec2.toRecord player.position
+
+        viewport =
+            { pixelSize = viewportSize
+            , minimumVisibleWorldSize = { width = 20, height = 20 }
+            }
+
+        overlapsViewport =
+            Viewport.overlaps viewport playerPosition
+
+--         tileIsVisible rowColumn =
+--             overlapsViewport { x = toFloat rowColumn.column, y = toFloat rowColumn.row } { width = 0, height = 0 }
+
         tilesTree =
-            allRowColumns
+            visibleRowColumns playerPosition (Viewport.visibleWorldSize viewport)
+                --|> List.filter tileIsVisible
                 |> List.map renderTile
                 |> Nest []
+
+        worldToCamera =
+            viewport
+                |> Viewport.worldToCameraTransform
+                |> Mat4.translate3 -playerPosition.x -playerPosition.y 0
 
         playerEntity =
             [ mob worldToCamera player.position (vec3 0 1 0)

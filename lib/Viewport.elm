@@ -7,10 +7,10 @@ module Viewport
         , WorldSize
         , getWindowSize
         , onWindowResize
+        , overlaps
         , pixelToWorld
-        , setMinimumVisibleWorldSize
-        , setPixelSize
         , toFullWindowHtml
+        , visibleWorldSize
         , worldToCameraTransform
         , worldToPixel
         )
@@ -22,14 +22,6 @@ import Html.Attributes exposing (style)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Task
 import WebGL
-
-
-{-| TODO add:
-
-          viewportInWorldCoordinates : PixelSize -> WorldSize -> WorldPosition -> (WorldPosition, WorldPosition)
-
--}
-
 
 
 -- Types
@@ -63,18 +55,6 @@ type alias Viewport =
     { pixelSize : PixelSize
     , minimumVisibleWorldSize : WorldSize
     }
-
-
-{-| Helpers to make your life easier if you want to store a Viewport in your Model
--}
-setPixelSize : PixelSize -> Viewport -> Viewport
-setPixelSize size viewport =
-    { viewport | pixelSize = size }
-
-
-setMinimumVisibleWorldSize : WorldSize -> Viewport -> Viewport
-setMinimumVisibleWorldSize size viewport =
-    { viewport | minimumVisibleWorldSize = size }
 
 
 {-| Find the scaling factors that ensure that a given world size will be entirely
@@ -139,6 +119,47 @@ worldToCameraTransform viewport =
             2.0 * scale / toFloat viewport.pixelSize.height
     in
     Mat4.makeScale3 scaleX scaleY 1
+
+
+
+-- Viewport culling
+
+
+visibleWorldSize : Viewport -> WorldSize
+visibleWorldSize viewport =
+    let
+        scale =
+            worldToPixelScale viewport
+    in
+    { width = toFloat viewport.pixelSize.width / scale
+    , height = toFloat viewport.pixelSize.height / scale
+    }
+
+
+overlaps : Viewport -> WorldPosition -> WorldPosition -> WorldSize -> Bool
+overlaps viewport viewportCenter =
+    let
+        -- size in world coordinates
+        { width, height } =
+            visibleWorldSize viewport
+
+        left =
+            viewportCenter.x - width / 2
+
+        right =
+            viewportCenter.x + width / 2
+
+        top =
+            viewportCenter.y + height / 2
+
+        bottom =
+            viewportCenter.y - height / 2
+    in
+    \objectCenter objectSize ->
+        (objectCenter.x + objectSize.width / 2 > left)
+            && (objectCenter.x - objectSize.width / 2 < right)
+            && (objectCenter.y + objectSize.height / 2 > bottom)
+            && (objectCenter.y - objectSize.height / 2 < top)
 
 
 
