@@ -1,10 +1,12 @@
 module Svgl.Primitives
     exposing
-        ( Uniforms
+        ( PrimitiveShape(..)
+        , Uniforms
         , defaultUniforms
         , ellipse
         , rect
         , rightTri
+        , shape
         )
 
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -13,6 +15,12 @@ import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import WebGL exposing (Entity, Mesh, Shader)
 import WebGL.Settings exposing (Setting)
 import WebGL.Settings.Blend as Blend
+
+
+type PrimitiveShape
+    = Rectangle
+    | Ellipse
+    | RightTriangle
 
 
 type alias Attributes =
@@ -63,6 +71,19 @@ ellipse =
 rightTri : Uniforms -> Entity
 rightTri =
     WebGL.entityWith settings quadVertexShader rectFragmentShader normalizedRightTriMesh
+
+
+shape : PrimitiveShape -> Uniforms -> Entity
+shape primitiveType =
+    case primitiveType of
+        Rectangle ->
+            rect
+
+        Ellipse ->
+            ellipse
+
+        RightTriangle ->
+            rightTri
 
 
 normalizedQuadMesh : Mesh Attributes

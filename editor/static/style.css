@@ -1,0 +1,19 @@
+
+body {
+    margin: 0;
+    background-color: gray;
+}
+
+.overlay {
+    position: absolute;
+    top: 1em;
+    right: 1em;
+}
+
+.indent {
+  margin-left: 1em;
+}
+
+.tree-row {
+  user-select: none;
+}

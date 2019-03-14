@@ -2,12 +2,13 @@ module Assets.Tiles exposing (..)
 
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Svgl.Tree exposing (..)
+import Svgl.Tree exposing (SvglNode, defaultParams, rect, ellipse)
 import TileCollision exposing (RowColumn, TileCollider)
+import TransformTree exposing (Node(..))
 
 
 type alias TileType =
-    { render : Node
+    { render : SvglNode
     , collider : TileCollider SquareCollider
     }
 
@@ -71,7 +72,7 @@ squareObstacle =
 none : TileType
 none =
     { collider = TileCollision.collideNever
-    , render = Nod [] []
+    , render = Nest [] []
     }
 
 
@@ -101,16 +102,18 @@ rivetedBlocker =
 
             ell =
                 { defaultParams
-                    | fill =  vec3 0.5 0.5 1
+                    | fill = vec3 0.5 0.5 1
+
                     --, stroke =
                     , strokeWidth = 0
                     , w = 0.1
                     , h = 0.1
                 }
 
-            o = 0.37
+            o =
+                0.37
         in
-        Nod
+        Nest
             []
             [ rect re
             , ellipse { ell | x = -o, y = -o }
@@ -125,7 +128,7 @@ oneWayPlatform : TileType
 oneWayPlatform =
     { collider = collideWhenYDecreases
     , render =
-        Nod
+        Nest
             []
             [ rect
                 { defaultParams
@@ -146,7 +149,7 @@ crossedStruts =
             , collideWhenYDecreases
             ]
     , render =
-        Nod
+        Nest
             []
             [ rect
                 { defaultParams
@@ -186,7 +189,7 @@ ground : TileType
 ground =
     { collider = squareObstacle
     , render =
-        Nod
+        Nest
             []
             [ rect
                 { defaultParams
