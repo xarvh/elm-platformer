@@ -1,0 +1,18 @@
+body {
+    margin: 0;
+}
+
+.full-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+
+.dialog-text {
+    font-size: 0.5px;
+    font-family: monospace, monospace;
+}

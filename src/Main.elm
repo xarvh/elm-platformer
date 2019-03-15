@@ -5,7 +5,7 @@ import Browser
 import Browser.Events
 import Game
 import Html exposing (Html, div)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (class)
 import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
@@ -14,6 +14,8 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Scene
+import Svg
+import Svg.Attributes as SA
 import TileCollision
 import Time exposing (Posix)
 import Viewport
@@ -147,6 +149,98 @@ updateOnKeyChange maybeKeyChange model =
 
 
 
+-- UI HUD
+
+
+viewTextDialog : Viewport.PixelSize -> String -> Html Msg
+viewTextDialog viewportSize content =
+    let
+        s =
+            String.fromFloat
+
+        hudW =
+            12
+
+        hudH =
+            12
+
+        hhW =
+            hudW / 2
+
+        hhH =
+            hudH / 2
+
+        margin =
+            1
+
+        dialogW =
+            hudW - 2 * margin
+
+        dialogH =
+            4
+
+        cornerRadius =
+            0.3
+
+        dialogX =
+            -hudW / 2 + margin
+
+        dialogY =
+            hudH / 2 - margin - dialogH
+
+        fontHeight =
+            0.5
+
+        lineHeight =
+            fontHeight
+
+        textX =
+            dialogX + cornerRadius
+
+        textY row =
+            dialogY + cornerRadius + (1 + row) * lineHeight
+    in
+    Svg.svg
+        [ SA.class "full-window"
+        , Viewport.svgViewBox
+            { pixelSize = viewportSize
+            , minimumVisibleWorldSize =
+                { width = hudW
+                , height = hudH
+                }
+            }
+        ]
+        [ Svg.rect
+            [ dialogX |> s |> SA.x
+            , dialogY |> s |> SA.y
+            , dialogW |> s |> SA.width
+            , dialogH |> s |> SA.height
+            , cornerRadius |> s |> SA.ry
+            , SA.fill "rgba(50, 50, 255, 0.9)"
+            , SA.stroke "rgb(150, 150, 150)"
+            , SA.strokeWidth "0.2"
+            ]
+            []
+        , Svg.text_
+            [ textX |> s |> SA.x
+            , textY 0 |> s |> SA.y
+            , SA.fill "rgb(250, 250, 255)"
+            , SA.stroke "none" --rgb(250, 250, 150)"
+            , SA.class "dialog-text"
+            ]
+            [ Svg.text "This is super annoying" ]
+        , Svg.text_
+            [ textX |> s |> SA.x
+            , textY 1 |> s |> SA.y
+            , SA.fill "rgb(250, 250, 255)"
+            , SA.stroke "none" --rgb(250, 250, 150)"
+            , SA.class "dialog-text"
+            ]
+            [ Svg.text "This too is super annoying" ]
+        ]
+
+
+
 -- View
 
 
@@ -164,7 +258,7 @@ view model =
     { title = "Generic platformer"
     , body =
         [ Viewport.toFullWindowHtml model.viewportSize entities
-        , Html.node "style" [] [ Html.text "body { margin: 0; }" ]
+        , viewTextDialog model.viewportSize "LULZ"
         ]
     }
 
@@ -190,8 +284,6 @@ subscriptions model =
             Browser.Events.onAnimationFrameDelta OnAnimationFrame
         , Keyboard.subscriptions |> Sub.map OnKey
         , Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
-
-        --, Browser.Events.onClick (Json.Decode.succeed OnMouseClick)
         ]
 
 

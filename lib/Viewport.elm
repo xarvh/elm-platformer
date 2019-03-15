@@ -5,12 +5,13 @@ module Viewport
         , Viewport
         , WorldPosition
         , WorldSize
+        , actualVisibleWorldSize
         , getWindowSize
         , onWindowResize
         , overlaps
         , pixelToWorld
+        , svgViewBox
         , toFullWindowHtml
-        , visibleWorldSize
         , worldToCameraTransform
         , worldToPixel
         )
@@ -20,6 +21,8 @@ import Browser.Events
 import Html exposing (Attribute, Html, div)
 import Html.Attributes exposing (style)
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Svg
+import Svg.Attributes
 import Task
 import WebGL
 
@@ -125,8 +128,8 @@ worldToCameraTransform viewport =
 -- Viewport culling
 
 
-visibleWorldSize : Viewport -> WorldSize
-visibleWorldSize viewport =
+actualVisibleWorldSize : Viewport -> WorldSize
+actualVisibleWorldSize viewport =
     let
         scale =
             worldToPixelScale viewport
@@ -141,7 +144,7 @@ overlaps viewport viewportCenter =
     let
         -- size in world coordinates
         { width, height } =
-            visibleWorldSize viewport
+            actualVisibleWorldSize viewport
 
         left =
             viewportCenter.x - width / 2
@@ -181,6 +184,26 @@ getWindowSize msgConstructor =
 onWindowResize : (PixelSize -> msg) -> Sub msg
 onWindowResize msgConstructor =
     Browser.Events.onResize (\w h -> msgConstructor { width = w, height = h })
+
+
+
+-- Svg
+
+
+svgViewBox : Viewport -> Svg.Attribute a
+svgViewBox viewport =
+    let
+        { width, height } =
+            actualVisibleWorldSize viewport
+    in
+    [ -width / 2, -height / 2, width, height ]
+        |> List.map String.fromFloat
+        |> String.join " "
+        |> Svg.Attributes.viewBox
+
+
+
+-- WebGL
 
 
 toFullWindowHtml : PixelSize -> List WebGL.Entity -> Html a

@@ -99,12 +99,8 @@ entities { viewportSize, time, player, collisions } =
         overlapsViewport =
             Viewport.overlaps viewport playerPosition
 
---         tileIsVisible rowColumn =
---             overlapsViewport { x = toFloat rowColumn.column, y = toFloat rowColumn.row } { width = 0, height = 0 }
-
         tilesTree =
-            visibleRowColumns playerPosition (Viewport.visibleWorldSize viewport)
-                --|> List.filter tileIsVisible
+            visibleRowColumns playerPosition (Viewport.actualVisibleWorldSize viewport)
                 |> List.map renderTile
                 |> Nest []
 
