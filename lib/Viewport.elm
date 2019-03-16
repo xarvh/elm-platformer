@@ -11,20 +11,16 @@ module Viewport
         , overlaps
         , pixelToWorld
         , svgViewBox
-        , toFullWindowHtml
         , worldToCameraTransform
         , worldToPixel
         )
 
 import Browser.Dom
 import Browser.Events
-import Html exposing (Attribute, Html, div)
-import Html.Attributes exposing (style)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Svg
 import Svg.Attributes
 import Task
-import WebGL
 
 
 -- Types
@@ -139,7 +135,7 @@ actualVisibleWorldSize viewport =
     }
 
 
-overlaps : Viewport -> WorldPosition -> WorldPosition -> WorldSize -> Bool
+overlaps : Viewport -> WorldPosition -> WorldSize -> WorldPosition -> Bool
 overlaps viewport viewportCenter =
     let
         -- size in world coordinates
@@ -158,7 +154,7 @@ overlaps viewport viewportCenter =
         bottom =
             viewportCenter.y - height / 2
     in
-    \objectCenter objectSize ->
+    \objectSize objectCenter ->
         (objectCenter.x + objectSize.width / 2 > left)
             && (objectCenter.x - objectSize.width / 2 < right)
             && (objectCenter.y + objectSize.height / 2 > bottom)
@@ -200,28 +196,3 @@ svgViewBox viewport =
         |> List.map String.fromFloat
         |> String.join " "
         |> Svg.Attributes.viewBox
-
-
-
--- WebGL
-
-
-toFullWindowHtml : PixelSize -> List WebGL.Entity -> Html a
-toFullWindowHtml pixelSize entities =
-    div
-        [ style "width" "100vw"
-        , style "height" "100vh"
-        , style "overflow" "hidden"
-        ]
-        [ WebGL.toHtmlWith
-            -- TODO get these from args
-            [ WebGL.alpha True
-            , WebGL.antialias
-            ]
-            [ style "width" "100vw"
-            , style "height" "100vh"
-            , Html.Attributes.width pixelSize.width
-            , Html.Attributes.height pixelSize.height
-            ]
-            entities
-        ]

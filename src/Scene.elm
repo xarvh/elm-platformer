@@ -5,41 +5,22 @@ import Assets.Tiles
 import Circle
 import Dict exposing (Dict)
 import Game exposing (..)
+import GameMain
 import List.Extra
 import Map
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Obstacle
+import Player
 import Quad
 import Set exposing (Set)
 import Svgl.Primitives exposing (defaultUniforms, rect)
 import Svgl.Tree exposing (SvglNode, ellipse, rect)
 import TileCollision exposing (RowColumn)
 import TransformTree exposing (..)
+import Vector exposing (Vector)
 import Viewport exposing (WorldPosition, WorldSize)
 import WebGL exposing (Entity, Mesh, Shader)
-
-
--- Periodic functions
-
-
-periodLinear : Float -> Float -> Float -> Float
-periodLinear time phase period =
-    let
-        t =
-            time + phase * period
-
-        n =
-            t / period |> floor |> toFloat
-    in
-    t / period - n
-
-
-periodHarmonic : Float -> Float -> Float -> Float
-periodHarmonic time phase period =
-    2 * pi * periodLinear time phase period |> sin
 
 
 visibleRowColumns : WorldPosition -> WorldSize -> List RowColumn
@@ -74,76 +55,68 @@ visibleRowColumns { x, y } { width, height } =
 
 
 
--- Entities
+-- WebGL Entities
 
 
 type alias EntitiesArgs =
     { viewportSize : Viewport.PixelSize
-    , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
-    , time : Float
-    , player : Game.Player
+    , game : Game
     }
 
 
 entities : EntitiesArgs -> List Entity
-entities { viewportSize, time, player, collisions } =
+entities { viewportSize, game } =
     let
-        playerPosition =
-            Vec2.toRecord player.position
-
+        -- viewport stuff
         viewport =
             { pixelSize = viewportSize
             , minimumVisibleWorldSize = { width = 20, height = 20 }
             }
 
         overlapsViewport =
-            Viewport.overlaps viewport playerPosition
-
-        tilesTree =
-            visibleRowColumns playerPosition (Viewport.actualVisibleWorldSize viewport)
-                |> List.map renderTile
-                |> Nest []
+            Viewport.overlaps viewport game.cameraPosition
 
         worldToCamera =
             viewport
                 |> Viewport.worldToCameraTransform
-                |> Mat4.translate3 -playerPosition.x -playerPosition.y 0
+                |> Mat4.translate3 -game.cameraPosition.x -game.cameraPosition.y 0
 
-        playerEntity =
-            [ mob worldToCamera player.position (vec3 0 1 0)
-            ]
+        visibleWorldSize =
+            Viewport.actualVisibleWorldSize viewport
+
+        -- webgl entities
+        tilesTree =
+            visibleRowColumns game.cameraPosition visibleWorldSize
+                |> List.map renderTile
+                |> Nest []
+
+        renderEnv : RenderEnv
+        renderEnv =
+            { worldToCamera = worldToCamera
+            , visibleWorldSize = visibleWorldSize
+            , overlapsViewport = overlapsViewport
+            }
+
+        gameEntities =
+            GameMain.render renderEnv game
 
         collisionEntities =
-            List.indexedMap (viewCollision worldToCamera) collisions
+            game.entitiesById
+                |> Dict.values
+                |> List.concatMap .tileCollisions
+                |> List.indexedMap (viewCollision worldToCamera)
                 |> List.concat
     in
     List.concat
         [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree []
-        , playerEntity
+        , gameEntities
         , collisionEntities
         ]
 
 
-mob : Mat4 -> Vec2 -> Vec3 -> Entity
-mob worldToViewport position color =
+dot : Mat4 -> Vector -> Float -> Vec3 -> Entity
+dot worldToViewport { x, y } size color =
     let
-        { x, y } =
-            Vec2.toRecord position
-
-        entityToViewport =
-            worldToViewport
-                |> Mat4.translate3 x y 0
-                |> Mat4.scale3 Game.playerSize.width Game.playerSize.height 1
-    in
-    Quad.entity entityToViewport color
-
-
-dot : Mat4 -> Vec2 -> Float -> Vec3 -> Entity
-dot worldToViewport position size color =
-    let
-        { x, y } =
-            Vec2.toRecord position
-
         entityToViewport =
             worldToViewport
                 |> Mat4.translate3 x y 0
@@ -166,8 +139,8 @@ viewCollision worldToViewport index collision =
                 _ ->
                     vec3 0 0 1
     in
-    [ dot worldToViewport (vec2 (toFloat collision.tile.column) (toFloat collision.tile.row)) 1.3 color
-    , dot worldToViewport (Vec2.fromRecord collision.aabbPositionAtImpact) 1 color
+    [ dot worldToViewport { x = toFloat collision.tile.column, y = toFloat collision.tile.row } 1.3 color
+    , dot worldToViewport collision.aabbPositionAtImpact 1 color
     ]
 
 
