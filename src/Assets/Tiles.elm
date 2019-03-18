@@ -1,10 +1,10 @@
 module Assets.Tiles exposing (..)
 
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Svgl.Tree exposing (SvglNode, defaultParams, rect, ellipse)
-import TileCollision exposing (RowColumn, TileCollider)
+import Svgl.Tree exposing (SvglNode, defaultParams, ellipse, rect)
+import TileCollision exposing (Collision, RowColumn, TileCollider)
 import TransformTree exposing (Node(..))
+import Vector exposing (Vector)
 
 
 type alias TileType =
@@ -21,6 +21,26 @@ type Delta
 type SquareCollider
     = X Delta
     | Y Delta
+
+
+fixSpeed : List (Collision SquareCollider) -> Vector -> Vector
+fixSpeed collisions speed =
+    let
+        sp collision v =
+            case collision.geometry of
+                X Increases ->
+                    { v | x = min 0 v.x }
+
+                X Decreases ->
+                    { v | x = max 0 v.x }
+
+                Y Increases ->
+                    { v | y = min 0 v.y }
+
+                Y Decreases ->
+                    { v | y = max 0 v.y }
+    in
+    List.foldl sp speed collisions
 
 
 

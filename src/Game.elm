@@ -3,106 +3,316 @@ module Game exposing (..)
 import Assets.Tiles
 import Dict exposing (Dict)
 import Map
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import TileCollision
-    exposing
-        ( AbsoluteAabbTrajectory
-        , Collision
-        , RowColumn
-        )
+import Math.Matrix4 as Mat4 exposing (Mat4)
+import Player
+import Random
+import TileCollision exposing (Collision)
+import Vector exposing (Vector)
+import Viewport
+import WebGL
 
 
---
+-- Basic types
 
 
-clampToRadius : Float -> Vec2 -> Vec2
-clampToRadius radius v =
-    let
-        ll =
-            Vec2.lengthSquared v
-    in
-    if ll <= radius * radius then
-        v
-    else
-        Vec2.scale (radius / sqrt ll) v
+type alias Seconds =
+    Float
 
 
-
---
-
-
-baseAcceleration =
-    8
+type alias Angle =
+    Float
 
 
-maxSpeed =
-    10
+type alias Id =
+    Int
 
 
-playerSize =
-    { width = 0.5
-    , height = 1
-    }
+type alias Size =
+    Viewport.WorldSize
 
 
 
---
+-- Game
 
 
 type alias Game =
-    { player : Player
+    { playerId : Id
+    , cameraPosition : Vector
+    , cameraMode : CameraMode
+    , entitiesById : Dict Id Entity
     , time : Float
+    , lastId : Id
+    , seed : Random.Seed
+    , laters : List ( Seconds, Delta )
     }
 
 
-type alias Player =
-    { position : Vec2
-    , speed : Vec2
+new : Game
+new =
+    { playerId = 0
+    , cameraPosition = Vector.origin
+    , cameraMode = CameraFollowsPlayer
+    , entitiesById = Dict.empty
+    , time = 0
+    , lastId = 0
+    , seed = Random.initialSeed 0
+    , laters = []
     }
 
 
-playerInit : Player
-playerInit =
-    { position = vec2 10 10
-    , speed = vec2 0 0
+type CameraMode
+    = CameraFollowsPlayer
+
+
+
+-- Entity
+
+
+type alias Entity =
+    { id : Id
+    , spawnedAt : Seconds
+
+    --
+    , position : Vector
+    , speed : Vector
+    , size : Size
+
+    --
+    , tileCollisions : List (Collision Assets.Tiles.SquareCollider)
+
+    --
+    , renderScripts : List RenderScript
+    , thinkScripts : List ThinkScript
     }
 
 
-playerThink : Float -> { x : Int, y : Int } -> Player -> ( Player, List (Collision Assets.Tiles.SquareCollider) )
-playerThink dt input player =
+newEntity : Game -> Entity
+newEntity game =
+    { id = game.lastId + 1
+    , spawnedAt = game.time
+
+    --
+    , position = Vector.origin
+    , speed = Vector.origin
+    , size = { width = 0, height = 0 }
+
+    --
+    , tileCollisions = []
+
+    --
+    , renderScripts = []
+    , thinkScripts = []
+    }
+
+
+{-| This is necessary to avoid a circular dependency between Entity and Game
+-}
+type RenderScript
+    = RenderScript RenderFunction
+
+
+type alias RenderFunction =
+    RenderEnv -> Game -> Entity -> List WebGL.Entity
+
+
+type alias RenderEnv =
+    { worldToCamera : Mat4
+    , visibleWorldSize : Size
+    , overlapsViewport : Size -> Vector -> Bool
+    }
+
+
+{-| This is necessary to avoid a circular dependency between Entity and Game
+-}
+type ThinkScript
+    = ThinkScript ThinkFunction
+
+
+type alias ThinkFunction =
+    ThinkEnv -> Game -> Entity -> ( Entity, Delta )
+
+
+type alias ThinkEnv =
+    { inputMove : Vector
+    , dt : Float
+    }
+
+
+
+-- Deltas
+
+
+type Delta
+    = DeltaNone
+    | DeltaList (List Delta)
+    | DeltaLater Seconds Delta
+    | DeltaGame (Game -> Game)
+    | DeltaRandom (Random.Generator Delta)
+    | DeltaOutcome Outcome
+      -- This is a way to allow update functions to produce Deltas. Not too happy about it.
+    | DeltaNeedsUpdatedGame (Game -> Delta)
+
+
+type Outcome
+    = OutcomeSave
+
+
+
+-- Game helpers
+
+
+noDelta : a -> ( a, Delta )
+noDelta a =
+    ( a, DeltaNone )
+
+
+createAndInitEntity : (Entity -> Entity) -> Game -> ( Entity, Game )
+createAndInitEntity initEntity game =
     let
-        movementAcceleration =
-            vec2 (toFloat input.x * baseAcceleration) (toFloat input.y * baseAcceleration)
+        entity =
+            game
+                |> newEntity
+                |> initEntity
+    in
+    ( entity
+    , { game
+        | entitiesById = Dict.insert entity.id entity game.entitiesById
+        , lastId = entity.id
+      }
+    )
 
-        gravityAcceleration =
-            vec2 0 (-baseAcceleration / 2)
 
-        friction =
-            Vec2.scale -3 player.speed
+deleteEntity : Id -> Game -> Game
+deleteEntity id game =
+    { game | entitiesById = Dict.remove id game.entitiesById }
 
-        totalAcceleration =
-            movementAcceleration
-                |> Vec2.add gravityAcceleration
-                |> Vec2.add friction
 
-        speed =
-            totalAcceleration
-                |> Vec2.scale dt
-                |> Vec2.add player.speed
-                |> clampToRadius maxSpeed
+appendThinkFunctions : List ThinkFunction -> Entity -> Entity
+appendThinkFunctions fs entity =
+    { entity | thinkScripts = entity.thinkScripts ++ List.map ThinkScript fs }
 
+
+appendRenderFunctions : List RenderFunction -> Entity -> Entity
+appendRenderFunctions fs entity =
+    { entity | renderScripts = entity.renderScripts ++ List.map RenderScript fs }
+
+
+
+-- Time helpers
+
+
+periodLinear : Seconds -> Float -> Seconds -> Float
+periodLinear time phase period =
+    let
+        t =
+            time + phase * period
+
+        n =
+            t / period |> floor |> toFloat
+    in
+    t / period - n
+
+
+periodHarmonic : Seconds -> Angle -> Seconds -> Float
+periodHarmonic time phase period =
+    2 * pi * periodLinear time phase period |> sin
+
+
+smooth : Float -> Float -> Float -> Float
+smooth t a b =
+    let
+        tt =
+            t
+
+        -- Ease.inOutCubic t
+    in
+    tt * b + (1 - tt) * a
+
+
+step : Float -> Float -> Float -> Float -> Float
+step t threshold a b =
+    if t > threshold then
+        b
+    else
+        a
+
+
+
+-- Angle helpers
+
+
+vectorToAngle : Vector -> Float
+vectorToAngle v =
+    atan2 v.x v.y
+
+
+normalizeAngle : Float -> Float
+normalizeAngle angle =
+    let
+        n =
+            (angle + pi) / (2 * pi) |> floor |> toFloat
+    in
+    angle - n * 2 * pi
+
+
+turnTo : Float -> Float -> Float -> Float
+turnTo maxTurn targetAngle currentAngle =
+    (targetAngle - currentAngle)
+        |> normalizeAngle
+        |> clamp -maxTurn maxTurn
+        |> (+) currentAngle
+        |> normalizeAngle
+
+
+angleToVector : Float -> Vector
+angleToVector angle =
+    { x = sin angle
+    , y = cos angle
+    }
+
+
+
+-- TODO: Stuff that probably should not be here
+
+
+applyGravity : ThinkFunction
+applyGravity env game entity =
+    noDelta
+        { entity
+            | speed =
+                { x = 0
+                , y = -4.0 * env.dt
+                }
+                    |> Vector.add entity.speed
+        }
+
+
+applyFriction : ThinkFunction
+applyFriction env game entity =
+    noDelta
+        { entity
+            | speed =
+                entity.speed
+                    |> Vector.scale (-3 * env.dt)
+                    |> Vector.add entity.speed
+        }
+
+
+moveCollideAndSlide : ThinkFunction
+moveCollideAndSlide env game entity =
+    let
         idealPosition =
-            speed
-                |> Vec2.scale dt
-                |> Vec2.add player.position
+            entity.speed
+                |> Vector.scale env.dt
+                |> Vector.add entity.position
 
         collisions =
             TileCollision.collide
                 (Map.getTileType >> .collider)
-                { width = playerSize.width
-                , height = playerSize.height
-                , start = Vec2.toRecord player.position
-                , end = Vec2.toRecord idealPosition
+                { width = entity.size.width
+                , height = entity.size.height
+                , start = entity.position
+                , end = idealPosition
                 }
 
         fixedPosition =
@@ -111,35 +321,11 @@ playerThink dt input player =
                     idealPosition
 
                 collision :: cs ->
-                    Vec2.fromRecord collision.fix
+                    collision.fix
     in
-    ( { player
-        | position = fixedPosition
-        , speed = fixSpeed ( input, player ) collisions speed
-      }
-    , collisions
-    )
-
-
-{-| TODO move this in Assets.Tiles? -}
-fixSpeed : a -> List (Collision Assets.Tiles.SquareCollider) -> Vec2 -> Vec2
-fixSpeed a collisions speed =
-    let
-        sp collision ( x, y ) =
-            case collision.geometry of
-                Assets.Tiles.X Assets.Tiles.Increases ->
-                    ( min 0 x, y )
-
-                Assets.Tiles.X Assets.Tiles.Decreases ->
-                    ( max 0 x, y )
-
-                Assets.Tiles.Y Assets.Tiles.Increases ->
-                    ( x, min 0 y )
-
-                Assets.Tiles.Y Assets.Tiles.Decreases ->
-                    ( x, max 0 y )
-
-        ( xx, yy ) =
-            List.foldl sp ( Vec2.getX speed, Vec2.getY speed ) collisions
-    in
-    vec2 xx yy
+    noDelta
+        { entity
+            | position = fixedPosition
+            , speed = Assets.Tiles.fixSpeed collisions entity.speed
+            , tileCollisions = collisions
+        }

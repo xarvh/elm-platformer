@@ -3,19 +3,21 @@ module Main exposing (..)
 import Assets.Tiles
 import Browser
 import Browser.Events
-import Game
+import Game exposing (Game)
+import GameMain
 import Html exposing (Html, div)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (class, style)
 import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
 import Map
-import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import PlayerMain
 import Scene
+import Svg
+import Svg.Attributes as SA
 import TileCollision
 import Time exposing (Posix)
+import Vector exposing (Vector)
 import Viewport
 import WebGL
 
@@ -30,11 +32,9 @@ type alias Flags =
 type alias Model =
     { viewportSize : Viewport.PixelSize
     , mousePosition : Viewport.PixelPosition
-    , currentTimeInSeconds : Float
-    , player : Game.Player
+    , game : Game
     , keys : List Keyboard.Key
     , pause : Bool
-    , collisions : List (TileCollision.Collision Assets.Tiles.SquareCollider)
     }
 
 
@@ -52,16 +52,22 @@ type Msg
 init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
+        -- This should be stored in the Map file
+        startingPosition =
+            Vector 10 10
+
+        ( player, game ) =
+            Game.new
+                |> Game.createAndInitEntity (PlayerMain.init startingPosition)
+
         model =
             { viewportSize =
                 { width = 640
                 , height = 480
                 }
-            , currentTimeInSeconds = 0
-            , player = Game.playerInit
+            , game = { game | playerId = player.id }
             , keys = []
             , pause = False
-            , collisions = []
             , mousePosition = { top = 0, left = 0 }
             }
 
@@ -101,24 +107,23 @@ update msg model =
 
         OnAnimationFrame dtInMilliseconds ->
             let
-                -- dt is in seconds
-                dt =
-                    dtInMilliseconds / 1000
+                keyboardArrows =
+                    Keyboard.Arrows.arrows model.keys
 
-                ( player, collisions ) =
-                    Game.playerThink dt (Keyboard.Arrows.arrows model.keys) model.player
+                thinkEnv =
+                    { dt = dtInMilliseconds / 1000
+                    , inputMove =
+                        { x = toFloat keyboardArrows.x
+                        , y = toFloat keyboardArrows.y
+                        }
+                    }
 
-                pause =
-                    Vec2.getX player.speed == 0
+                ( updatedGame, outcomes ) =
+                    GameMain.think thinkEnv model.game
+
+                -- TODO: do something with the outcomes
             in
-            noCmd
-                { model
-                    | currentTimeInSeconds = model.currentTimeInSeconds + dt
-
-                    --, pause = pause
-                    , player = player
-                    , collisions = collisions
-                }
+            noCmd { model | game = updatedGame }
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
@@ -127,14 +132,7 @@ updateOnKeyChange maybeKeyChange model =
         Just (Keyboard.KeyUp key) ->
             case Debug.log "KEY" key of
                 Keyboard.Enter ->
-                    let
-                        ( m, c ) =
-                            update (OnAnimationFrame 20) model
-
-                        q =
-                            Debug.log "player" ( model.player.speed, m.player.speed )
-                    in
-                    ( m, c )
+                    update (OnAnimationFrame 20) model
 
                 Keyboard.Character "p" ->
                     noCmd { model | pause = not model.pause }
@@ -147,6 +145,98 @@ updateOnKeyChange maybeKeyChange model =
 
 
 
+-- UI HUD
+
+
+viewTextDialog : Viewport.PixelSize -> String -> Html Msg
+viewTextDialog viewportSize content =
+    let
+        s =
+            String.fromFloat
+
+        hudW =
+            12
+
+        hudH =
+            12
+
+        hhW =
+            hudW / 2
+
+        hhH =
+            hudH / 2
+
+        margin =
+            1
+
+        dialogW =
+            hudW - 2 * margin
+
+        dialogH =
+            4
+
+        cornerRadius =
+            0.3
+
+        dialogX =
+            -hudW / 2 + margin
+
+        dialogY =
+            hudH / 2 - margin - dialogH
+
+        fontHeight =
+            0.5
+
+        lineHeight =
+            fontHeight
+
+        textX =
+            dialogX + cornerRadius
+
+        textY row =
+            dialogY + cornerRadius + (1 + row) * lineHeight
+    in
+    Svg.svg
+        [ SA.class "full-window"
+        , Viewport.svgViewBox
+            { pixelSize = viewportSize
+            , minimumVisibleWorldSize =
+                { width = hudW
+                , height = hudH
+                }
+            }
+        ]
+        [ Svg.rect
+            [ dialogX |> s |> SA.x
+            , dialogY |> s |> SA.y
+            , dialogW |> s |> SA.width
+            , dialogH |> s |> SA.height
+            , cornerRadius |> s |> SA.ry
+            , SA.fill "rgba(50, 50, 255, 0.9)"
+            , SA.stroke "rgb(150, 150, 150)"
+            , SA.strokeWidth "0.2"
+            ]
+            []
+        , Svg.text_
+            [ textX |> s |> SA.x
+            , textY 0 |> s |> SA.y
+            , SA.fill "rgb(250, 250, 255)"
+            , SA.stroke "none" --rgb(250, 250, 150)"
+            , SA.class "dialog-text"
+            ]
+            [ Svg.text "This is super annoying" ]
+        , Svg.text_
+            [ textX |> s |> SA.x
+            , textY 1 |> s |> SA.y
+            , SA.fill "rgb(250, 250, 255)"
+            , SA.stroke "none" --rgb(250, 250, 150)"
+            , SA.class "dialog-text"
+            ]
+            [ Svg.text "This too is super annoying" ]
+        ]
+
+
+
 -- View
 
 
@@ -156,17 +246,37 @@ view model =
         entities =
             Scene.entities
                 { viewportSize = model.viewportSize
-                , player = model.player
-                , collisions = model.collisions
-                , time = model.currentTimeInSeconds
+                , game = model.game
                 }
     in
     { title = "Generic platformer"
     , body =
-        [ Viewport.toFullWindowHtml model.viewportSize entities
-        , Html.node "style" [] [ Html.text "body { margin: 0; }" ]
+        [ toFullWindowHtml model.viewportSize entities
+
+        --, viewTextDialog model.viewportSize "LULZ"
         ]
     }
+
+
+toFullWindowHtml : Viewport.PixelSize -> List WebGL.Entity -> Html a
+toFullWindowHtml pixelSize entities =
+    div
+        [ style "width" "100vw"
+        , style "height" "100vh"
+        , style "overflow" "hidden"
+        ]
+        [ WebGL.toHtmlWith
+            [ WebGL.alpha True
+            , WebGL.antialias
+            , WebGL.clearColor 0 0 0 1
+            ]
+            [ style "width" "100vw"
+            , style "height" "100vh"
+            , Html.Attributes.width pixelSize.width
+            , Html.Attributes.height pixelSize.height
+            ]
+            entities
+        ]
 
 
 
@@ -190,8 +300,6 @@ subscriptions model =
             Browser.Events.onAnimationFrameDelta OnAnimationFrame
         , Keyboard.subscriptions |> Sub.map OnKey
         , Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
-
-        --, Browser.Events.onClick (Json.Decode.succeed OnMouseClick)
         ]
 
 
