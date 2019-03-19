@@ -1,8 +1,9 @@
 module Game exposing (..)
 
+import Array exposing (Array)
 import Assets.Tiles
+import Components
 import Dict exposing (Dict)
-import Map
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Player
 import Random
@@ -10,6 +11,30 @@ import TileCollision exposing (Collision)
 import Vector exposing (Vector)
 import Viewport
 import WebGL
+
+
+-- Re expose
+
+
+componentNamespace =
+    Components.componentNamespace
+
+
+coordinateToTile =
+    TileCollision.coordinateToTile
+
+
+vecToRowColumn =
+    TileCollision.vecToRowColumn
+
+
+
+-- Constants
+
+
+gravity =
+    40.0
+
 
 
 -- Basic types
@@ -31,6 +56,12 @@ type alias Size =
     Viewport.WorldSize
 
 
+type alias RowColumn =
+    { row : Int
+    , column : Int
+    }
+
+
 
 -- Game
 
@@ -39,7 +70,14 @@ type alias Game =
     { playerId : Id
     , cameraPosition : Vector
     , cameraMode : CameraMode
+
+    -- Actual game
     , entitiesById : Dict Id Entity
+    , mapWidth : Int
+    , mapHeight : Int
+    , mapTiles : Array Assets.Tiles.TileType
+
+    -- System
     , time : Float
     , lastId : Id
     , seed : Random.Seed
@@ -52,7 +90,14 @@ new =
     { playerId = 0
     , cameraPosition = Vector.origin
     , cameraMode = CameraFollowsPlayer
+
+    --
     , entitiesById = Dict.empty
+    , mapWidth = 1
+    , mapHeight = 1
+    , mapTiles = Array.fromList []
+
+    --
     , time = 0
     , lastId = 0
     , seed = Random.initialSeed 0
@@ -74,15 +119,18 @@ type alias Entity =
 
     --
     , position : Vector
-    , speed : Vector
+    , velocity : Vector
     , size : Size
-
-    --
-    , tileCollisions : List (Collision Assets.Tiles.SquareCollider)
+    , flipX : Bool
 
     --
     , renderScripts : List RenderScript
     , thinkScripts : List ThinkScript
+    , components : Dict String Components.Component
+
+    --
+    , tileCollisions : List (Collision Assets.Tiles.SquareCollider)
+    , animationStart : Seconds
     }
 
 
@@ -93,15 +141,18 @@ newEntity game =
 
     --
     , position = Vector.origin
-    , speed = Vector.origin
+    , velocity = Vector.origin
     , size = { width = 0, height = 0 }
-
-    --
-    , tileCollisions = []
+    , flipX = False
 
     --
     , renderScripts = []
     , thinkScripts = []
+    , components = Dict.empty
+
+    --
+    , tileCollisions = []
+    , animationStart = game.time
     }
 
 
@@ -117,6 +168,7 @@ type alias RenderFunction =
 
 type alias RenderEnv =
     { worldToCamera : Mat4
+    , entityToCamera : Vector -> Mat4
     , visibleWorldSize : Size
     , overlapsViewport : Size -> Vector -> Bool
     }
@@ -133,7 +185,11 @@ type alias ThinkFunction =
 
 
 type alias ThinkEnv =
-    { inputMove : Vector
+    { inputHoldHorizontalMove : Int
+    , inputHoldCrouch : Bool
+    , inputHoldJump : Bool
+    , inputClickJump : Bool
+    , inputClickUse : Bool
     , dt : Float
     }
 
@@ -155,6 +211,20 @@ type Delta
 
 type Outcome
     = OutcomeSave
+
+
+
+-- Map helpers
+
+
+getTileType : Game -> RowColumn -> Assets.Tiles.TileType
+getTileType game { row, column } =
+    case Array.get (column + (game.mapHeight - row - 1) * game.mapWidth) game.mapTiles of
+        Just tileType ->
+            tileType
+
+        Nothing ->
+            Assets.Tiles.none
 
 
 
@@ -237,6 +307,16 @@ step t threshold a b =
         a
 
 
+sign : number -> number
+sign n =
+    if n < 0 then
+        -1
+    else if n > 0 then
+        1
+    else
+        0
+
+
 
 -- Angle helpers
 
@@ -279,22 +359,23 @@ applyGravity : ThinkFunction
 applyGravity env game entity =
     noDelta
         { entity
-            | speed =
-                { x = 0
-                , y = -4.0 * env.dt
-                }
-                    |> Vector.add entity.speed
+            | velocity =
+                Vector.add
+                    entity.velocity
+                    { x = 0
+                    , y = -gravity * env.dt
+                    }
         }
 
 
-applyFriction : ThinkFunction
-applyFriction env game entity =
+applyFriction : Float -> ThinkFunction
+applyFriction friction env game entity =
     noDelta
         { entity
-            | speed =
-                entity.speed
-                    |> Vector.scale (-3 * env.dt)
-                    |> Vector.add entity.speed
+            | velocity =
+                entity.velocity
+                    |> Vector.scale (-friction * env.dt)
+                    |> Vector.add entity.velocity
         }
 
 
@@ -302,13 +383,13 @@ moveCollideAndSlide : ThinkFunction
 moveCollideAndSlide env game entity =
     let
         idealPosition =
-            entity.speed
+            entity.velocity
                 |> Vector.scale env.dt
                 |> Vector.add entity.position
 
         collisions =
             TileCollision.collide
-                (Map.getTileType >> .collider)
+                (getTileType game >> .collider)
                 { width = entity.size.width
                 , height = entity.size.height
                 , start = entity.position
@@ -326,6 +407,6 @@ moveCollideAndSlide env game entity =
     noDelta
         { entity
             | position = fixedPosition
-            , speed = Assets.Tiles.fixSpeed collisions entity.speed
+            , velocity = Assets.Tiles.fixSpeed collisions entity.velocity
             , tileCollisions = collisions
         }

@@ -1,13 +1,11 @@
 module Scene exposing (..)
 
-import Assets.DemoLevel
 import Assets.Tiles
 import Circle
 import Dict exposing (Dict)
 import Game exposing (..)
 import GameMain
 import List.Extra
-import Map
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Obstacle
@@ -23,17 +21,17 @@ import Viewport exposing (WorldPosition, WorldSize)
 import WebGL exposing (Entity, Mesh, Shader)
 
 
-visibleRowColumns : WorldPosition -> WorldSize -> List RowColumn
-visibleRowColumns { x, y } { width, height } =
+visibleRowColumns : Game -> WorldPosition -> WorldSize -> List RowColumn
+visibleRowColumns game { x, y } { width, height } =
     let
         left =
             x - width / 2 |> floor |> max 0
 
         right =
-            x + width / 2 |> ceiling |> min (Assets.DemoLevel.width - 1)
+            x + width / 2 |> ceiling |> min (game.mapWidth - 1)
 
         top =
-            y + height / 2 |> ceiling |> min (Assets.DemoLevel.height - 1)
+            y + height / 2 |> ceiling |> min (game.mapHeight - 1)
 
         bottom =
             y - height / 2 |> floor |> max 0
@@ -81,18 +79,22 @@ entities { viewportSize, game } =
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 -game.cameraPosition.x -game.cameraPosition.y 0
 
+        entityToCamera position =
+            worldToCamera |> Mat4.translate3 position.x position.y 0
+
         visibleWorldSize =
             Viewport.actualVisibleWorldSize viewport
 
         -- webgl entities
         tilesTree =
-            visibleRowColumns game.cameraPosition visibleWorldSize
-                |> List.map renderTile
+            visibleRowColumns game game.cameraPosition visibleWorldSize
+                |> List.map (renderTile game)
                 |> Nest []
 
         renderEnv : RenderEnv
         renderEnv =
             { worldToCamera = worldToCamera
+            , entityToCamera = entityToCamera
             , visibleWorldSize = visibleWorldSize
             , overlapsViewport = overlapsViewport
             }
@@ -144,10 +146,10 @@ viewCollision worldToViewport index collision =
     ]
 
 
-renderTile : RowColumn -> SvglNode
-renderTile rowColumn =
+renderTile : Game -> RowColumn -> SvglNode
+renderTile game rowColumn =
     Nest
         [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row)
         ]
-        [ (Map.getTileType rowColumn).render
+        [ (getTileType game rowColumn).render
         ]

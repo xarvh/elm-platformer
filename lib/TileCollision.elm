@@ -321,8 +321,19 @@ makeTrajectory s e x =
     (x - s.x) * (e.y - s.y) / (e.x - s.x) + s.y
 
 
-collideWhenXIncreases : TileCollider ()
-collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight } =
+thickCollideWhenXIncreases : TileCollider ()
+thickCollideWhenXIncreases =
+    collideWhenXIncreases 0.99
+
+
+{-| bounceBackTheshold:
+
+  - Use 0.99 if you don't want anything to pass through it ever
+  - Use 0.2 or smaller for one-way colliders
+
+-}
+collideWhenXIncreases : Float -> TileCollider ()
+collideWhenXIncreases bounceBackTheshold { relativeStart, relativeEnd, halfWidth, halfHeight } =
     let
         -- The actual X coordinate of the blocker respect to the tile center is -0.5
         blockX =
@@ -331,7 +342,7 @@ collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight } =
     if relativeStart.x >= relativeEnd.x then
         -- If movement is not left to right, no point in continuing
         Nothing
-    else if relativeStart.x + halfWidth >= blockX + 0.01 then
+    else if relativeStart.x + halfWidth >= blockX + bounceBackTheshold then
         -- The AABB is already past the block, so it should pass
         Nothing
     else if relativeEnd.x + halfWidth <= blockX then
@@ -371,7 +382,7 @@ collideWhenXIncreases { relativeStart, relativeEnd, halfWidth, halfHeight } =
                 { geometry = ()
                 , impactPoint = point
                 , aabbPositionAtImpact = aabbPositionAtImpact
-                , fix = { relativeEnd | x = max relativeStart.x fixedX }
+                , fix = { relativeEnd | x = fixedX } --max relativeStart.x fixedX }
                 , distanceSquared = distanceSquared relativeStart aabbPositionAtImpact
                 , tile = { row = 0, column = 0 }
                 }
