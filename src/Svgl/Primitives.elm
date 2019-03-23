@@ -29,6 +29,8 @@ type alias Attributes =
 
 type alias Uniforms =
     { entityToCamera : Mat4
+    , darknessFocus : Vec2
+    , darknessIntensity : Float
     , dimensions : Vec2
     , fill : Vec3
     , stroke : Vec3
@@ -40,6 +42,8 @@ type alias Uniforms =
 defaultUniforms : Uniforms
 defaultUniforms =
     { entityToCamera = Mat4.identity
+    , darknessFocus = vec2 0 0
+    , darknessIntensity = 0
     , dimensions = vec2 1 1
     , fill = vec3 0.4 0.4 0.4
     , stroke = vec3 0.6 0.6 0.6
@@ -49,7 +53,9 @@ defaultUniforms =
 
 
 type alias Varying =
-    { localPosition : Vec2 }
+    { localPosition : Vec2
+    , cameraPosition : Vec2
+    }
 
 
 settings : List Setting
@@ -124,10 +130,12 @@ quadVertexShader =
         uniform float strokeWidth;
 
         varying vec2 localPosition;
+        varying vec2 cameraPosition;
 
         void main () {
             localPosition = dimensions * position; //(dimensions + strokeWidth * 2.0) * position;
             gl_Position = entityToCamera * vec4(localPosition, 0, 1);
+            cameraPosition = gl_Position.xy;
         }
     |]
 
@@ -138,6 +146,8 @@ rectFragmentShader =
         precision mediump float;
 
         uniform mat4 entityToCamera;
+        uniform vec2 darknessFocus;
+        uniform float darknessIntensity;
         uniform vec2 dimensions;
         uniform vec3 fill;
         uniform vec3 stroke;
@@ -145,6 +155,7 @@ rectFragmentShader =
         uniform float opacity;
 
         varying vec2 localPosition;
+        varying vec2 cameraPosition;
 
         // TODO: transform into `pixelSize`, make it a uniform
         float pixelsPerTile = 30.0;
@@ -167,7 +178,11 @@ rectFragmentShader =
           float strokeVsFill = mirrorStep(fillSize.x, localPosition.x) * mirrorStep(fillSize.y, localPosition.y);
           vec3 color = mix(stroke, fill, strokeVsFill);
 
-          gl_FragColor = opacity * alpha * vec4(color, 1.0);
+          // darkness effect
+          vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
+          float d = distance(cameraPosition, darknessFocus);
+          float i = 1.0 - 0.9 * darknessIntensity;
+          gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
         }
     |]
 
@@ -178,6 +193,8 @@ ellipseFragmentShader =
         precision mediump float;
 
         uniform mat4 entityToCamera;
+        uniform vec2 darknessFocus;
+        uniform float darknessIntensity;
         uniform vec2 dimensions;
         uniform vec3 fill;
         uniform vec3 stroke;
@@ -185,6 +202,7 @@ ellipseFragmentShader =
         uniform float opacity;
 
         varying vec2 localPosition;
+        varying vec2 cameraPosition;
 
         // TODO: transform into `pixelSize`, make it a uniform
         float pixelsPerTile = 30.0;
@@ -244,6 +262,10 @@ ellipseFragmentShader =
 
           vec3 color = mix(fill, stroke, fillVsStroke);
 
-          gl_FragColor = opacity * alpha * vec4(color, 1.0);
+          // darkness effect
+          vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
+          float d = distance(cameraPosition, darknessFocus);
+          float i = 0.9 - 0.7 * darknessIntensity;
+          gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
         }
     |]
