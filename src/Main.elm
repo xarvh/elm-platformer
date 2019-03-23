@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Assets.Levels.First
 import Assets.Tiles
 import Browser
 import Browser.Events
@@ -10,8 +11,6 @@ import Html.Attributes exposing (class, style)
 import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
-import Map
-import PlayerMain
 import Scene
 import Svg
 import Svg.Attributes as SA
@@ -33,7 +32,8 @@ type alias Model =
     { viewportSize : Viewport.PixelSize
     , mousePosition : Viewport.PixelPosition
     , game : Game
-    , keys : List Keyboard.Key
+    , newKeys : List Keyboard.Key
+    , oldKeys : List Keyboard.Key
     , pause : Bool
     }
 
@@ -56,17 +56,14 @@ init flags =
         startingPosition =
             Vector 10 10
 
-        ( player, game ) =
-            Game.new
-                |> Game.createAndInitEntity (PlayerMain.init startingPosition)
-
         model =
             { viewportSize =
                 { width = 640
                 , height = 480
                 }
-            , game = { game | playerId = player.id }
-            , keys = []
+            , game = Assets.Levels.First.init
+            , newKeys = []
+            , oldKeys = []
             , pause = False
             , mousePosition = { top = 0, left = 0 }
             }
@@ -96,9 +93,12 @@ update msg model =
         OnKey keymsg ->
             let
                 ( keys, maybeKeyChange ) =
-                    Keyboard.updateWithKeyChange Keyboard.anyKey keymsg model.keys
+                    Keyboard.updateWithKeyChange Keyboard.anyKey keymsg model.newKeys
             in
-            { model | keys = keys }
+            { model
+                | newKeys = keys
+                , oldKeys = model.newKeys
+            }
                 |> updateOnKeyChange maybeKeyChange
 
         OnMouseMove position ->
@@ -108,14 +108,21 @@ update msg model =
         OnAnimationFrame dtInMilliseconds ->
             let
                 keyboardArrows =
-                    Keyboard.Arrows.arrows model.keys
+                    Keyboard.Arrows.arrows model.newKeys
+
+                held key =
+                    List.member key model.newKeys
+
+                clicked key =
+                    List.member key model.newKeys && not (List.member key model.oldKeys)
 
                 thinkEnv =
                     { dt = dtInMilliseconds / 1000
-                    , inputMove =
-                        { x = toFloat keyboardArrows.x
-                        , y = toFloat keyboardArrows.y
-                        }
+                    , inputHoldHorizontalMove = keyboardArrows.x
+                    , inputHoldCrouch = keyboardArrows.y == -1
+                    , inputHoldJump = held (Keyboard.Character " ")
+                    , inputClickJump = clicked (Keyboard.Character " ")
+                    , inputClickUse = clicked Keyboard.ArrowUp
                     }
 
                 ( updatedGame, outcomes ) =
