@@ -158,13 +158,13 @@ rivetedBlocker =
         let
             re =
                 { defaultParams
-                    | fill = vec3 0 0 0.5
-                    , stroke = vec3 0.5 0.5 1
+                    | fill = vec3 0.5 0.5 0.5
+                    , stroke = vec3 0.8 0.8 0.8
                 }
 
             ell =
                 { defaultParams
-                    | fill = vec3 0.5 0.5 1
+                    | fill = vec3 0.8 0.8 0.8
 
                     --, stroke =
                     , strokeWidth = 0
@@ -201,8 +201,8 @@ oneWayPlatform =
             []
             [ rect
                 { defaultParams
-                    | fill = vec3 0.5 0.5 1
-                    , stroke = vec3 0 0 0.5
+                    | fill = vec3 0.8 0.8 0.8
+                    , stroke = vec3 0.5 0.5 0.5
                     , y = 0.5 - platformThickness / 2
                     , h = platformThickness
                 }

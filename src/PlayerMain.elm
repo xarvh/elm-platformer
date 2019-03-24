@@ -70,11 +70,11 @@ airWalkingSpeed =
 
 
 jumpMaxHeightWithoutBoost =
-    1 + 0.1
+    1 + 0.2
 
 
 jumpMaxHeightWithBoost =
-    2 + 0.2
+    2 + 0.3
 
 
 runningSpeed =
