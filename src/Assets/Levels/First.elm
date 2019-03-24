@@ -187,8 +187,30 @@ render env game entity =
         , List.range 0 5
             |> List.map (renderLeg game entity)
             |> Nest [ translate2 0 -0.4 ]
+        , List.range 0 1
+            |> List.map (renderSatellites game entity)
+            |> Nest []
         ]
             |> Nest [ translate entity.position ]
+
+
+renderSatellites game entity index =
+    let
+        a =
+            periodHarmonic game.time (toFloat index * pi / 2) 1
+    in
+    Nest
+        [ rotateDeg (a * 130)
+        , translate2 0 0.7
+        ]
+        [ ellipse
+            { defaultParams
+                | fill = vec3 1 0.5 0.5
+                , stroke = vec3 1 0 0
+                , w = 0.3
+                , h = 0.15
+            }
+        ]
 
 
 renderLed game entity index =
