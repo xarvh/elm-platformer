@@ -7,6 +7,7 @@ import Game exposing (..)
 import GameMain
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Obstacle
 import Player
@@ -79,9 +80,6 @@ entities { viewportSize, game } =
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 -game.cameraPosition.x -game.cameraPosition.y 0
 
-        entityToCamera position =
-            worldToCamera |> Mat4.translate3 position.x position.y 0
-
         visibleWorldSize =
             Viewport.actualVisibleWorldSize viewport
 
@@ -94,13 +92,17 @@ entities { viewportSize, game } =
         renderEnv : RenderEnv
         renderEnv =
             { worldToCamera = worldToCamera
-            , entityToCamera = entityToCamera
             , visibleWorldSize = visibleWorldSize
             , overlapsViewport = overlapsViewport
             }
 
         entitiesTree =
             GameMain.render renderEnv game
+
+        playerPosition =
+            Dict.get game.playerId game.entitiesById
+                |> Maybe.map .position
+                |> Maybe.withDefault Vector.origin
 
         {-
            collisionEntities =
@@ -110,10 +112,17 @@ entities { viewportSize, game } =
                    |> List.indexedMap (viewCollision worldToCamera)
                    |> List.concat
         -}
+        leafToWebGl =
+            Svgl.Tree.svglLeafToWebGLEntity
+                { defaultUniforms
+                    | worldToCamera = worldToCamera
+                    , darknessIntensity = game.darknessState
+                    , darknessFocus = Math.Vector2.fromRecord playerPosition
+                }
     in
     []
-        |> TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera entitiesTree
-        |> TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree
+        |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity entitiesTree
+        |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree
 
 
 dot : Mat4 -> Vector -> Float -> Vec3 -> Entity

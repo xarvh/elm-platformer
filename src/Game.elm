@@ -177,7 +177,6 @@ type alias RenderFunction =
 
 type alias RenderEnv =
     { worldToCamera : Mat4
-    , entityToCamera : Vector -> Mat4
     , visibleWorldSize : Size
     , overlapsViewport : Size -> Vector -> Bool
     }

@@ -3,7 +3,7 @@ module Svgl.Tree exposing (..)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Svgl.Primitives exposing (PrimitiveShape(..), defaultUniforms)
+import Svgl.Primitives exposing (PrimitiveShape(..))
 import TransformTree exposing (Node(..))
 import WebGL
 
@@ -39,15 +39,15 @@ defaultParams =
     , rotate = 0
     , w = 1
     , h = 1
-    , fill = defaultUniforms.fill
-    , stroke = defaultUniforms.stroke
+    , fill = Svgl.Primitives.defaultUniforms.fill
+    , stroke = Svgl.Primitives.defaultUniforms.stroke
     , strokeWidth = 0.025
     , opacity = 1
     }
 
 
-svglLeafToWebGLEntity : Mat4 -> Svgl -> WebGL.Entity
-svglLeafToWebGLEntity parentToCamera svgl =
+svglLeafToWebGLEntity : Svgl.Primitives.Uniforms -> Mat4 -> Svgl -> WebGL.Entity
+svglLeafToWebGLEntity defaultUniforms parentToWorld svgl =
     case svgl of
         PureEntity entity ->
             entity
@@ -56,8 +56,8 @@ svglLeafToWebGLEntity parentToCamera svgl =
             Svgl.Primitives.shape
                 shape
                 { defaultUniforms
-                    | entityToCamera =
-                        parentToCamera
+                    | entityToWorld =
+                        parentToWorld
                             |> Mat4.translate3 p.x p.y p.z
                             |> Mat4.rotate p.rotate (vec3 0 0 -1)
                     , dimensions = vec2 p.w p.h

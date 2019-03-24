@@ -28,7 +28,8 @@ type alias Attributes =
 
 
 type alias Uniforms =
-    { entityToCamera : Mat4
+    { entityToWorld : Mat4
+    , worldToCamera : Mat4
     , darknessFocus : Vec2
     , darknessIntensity : Float
     , dimensions : Vec2
@@ -41,7 +42,8 @@ type alias Uniforms =
 
 defaultUniforms : Uniforms
 defaultUniforms =
-    { entityToCamera = Mat4.identity
+    { entityToWorld = Mat4.identity
+    , worldToCamera = Mat4.identity
     , darknessFocus = vec2 0 0
     , darknessIntensity = 0
     , dimensions = vec2 1 1
@@ -54,7 +56,7 @@ defaultUniforms =
 
 type alias Varying =
     { localPosition : Vec2
-    , cameraPosition : Vec2
+    , worldPosition : Vec2
     }
 
 
@@ -123,20 +125,22 @@ quadVertexShader =
 
         attribute vec2 position;
 
-        uniform mat4 entityToCamera;
+        uniform mat4 entityToWorld;
+        uniform mat4 worldToCamera;
         uniform vec2 dimensions;
         uniform vec3 fill;
         uniform vec3 stroke;
         uniform float strokeWidth;
 
         varying vec2 localPosition;
-        varying vec2 cameraPosition;
+        varying vec2 worldPosition;
 
         void main () {
-            //localPosition = dimensions * position;
             localPosition = (dimensions + strokeWidth * 2.0) * position;
-            gl_Position = entityToCamera * vec4(localPosition, 0, 1);
-            cameraPosition = gl_Position.xy;
+            vec4 worldPosition4 = entityToWorld * vec4(localPosition, 0, 1);
+
+            worldPosition = worldPosition4.xy;
+            gl_Position = worldToCamera * worldPosition4;
         }
     |]
 
@@ -146,7 +150,8 @@ rectFragmentShader =
     [glsl|
         precision mediump float;
 
-        uniform mat4 entityToCamera;
+        uniform mat4 entityToWorld;
+        uniform mat4 worldToCamera;
         uniform vec2 darknessFocus;
         uniform float darknessIntensity;
         uniform vec2 dimensions;
@@ -156,7 +161,7 @@ rectFragmentShader =
         uniform float opacity;
 
         varying vec2 localPosition;
-        varying vec2 cameraPosition;
+        varying vec2 worldPosition;
 
         // TODO: transform into `pixelSize`, make it a uniform
         float pixelsPerTile = 30.0;
@@ -181,7 +186,7 @@ rectFragmentShader =
 
           // darkness effect
           vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
-          float d = distance(cameraPosition, darknessFocus);
+          float d = distance(worldPosition, darknessFocus) / 10.0;
           float i = 1.0 - 0.9 * darknessIntensity;
           gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
         }
@@ -193,7 +198,8 @@ ellipseFragmentShader =
     [glsl|
         precision mediump float;
 
-        uniform mat4 entityToCamera;
+        uniform mat4 entityToWorld;
+        uniform mat4 worldToCamera;
         uniform vec2 darknessFocus;
         uniform float darknessIntensity;
         uniform vec2 dimensions;
@@ -203,7 +209,7 @@ ellipseFragmentShader =
         uniform float opacity;
 
         varying vec2 localPosition;
-        varying vec2 cameraPosition;
+        varying vec2 worldPosition;
 
         // TODO: transform into `pixelSize`, make it a uniform
         float pixelsPerTile = 30.0;
@@ -266,7 +272,7 @@ ellipseFragmentShader =
           // darkness effect
           //vec4 darknessColor = vec4(vec3(max(color.r, max(color.g, color.b))), 1.0);
           vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
-          float d = distance(cameraPosition, darknessFocus);
+          float d = distance(worldPosition, darknessFocus);
           float i = 0.9 - 0.7 * darknessIntensity;
           gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
         }

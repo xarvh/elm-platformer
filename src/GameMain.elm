@@ -1,11 +1,16 @@
 module GameMain exposing (..)
 
-import TransformTree exposing (Node(..))
-import Svgl.Tree exposing (SvglNode)
 import Dict exposing (Dict)
 import Game exposing (..)
 import Random
+import Svgl.Tree exposing (SvglNode)
+import TransformTree exposing (Node(..))
 import WebGL
+
+
+darknessSpeed =
+    100
+
 
 
 -- Think
@@ -21,8 +26,19 @@ think env game =
         ( updatedEntitiesById, deltas ) =
             game.entitiesById
                 |> Dict.foldl (executeAllThinkFunctions { env | dt = dt } game) ( Dict.empty, [] )
+
+        updatedGame =
+            { game
+                | entitiesById = updatedEntitiesById
+                , time = game.time + dt
+                , darknessState =
+                    if game.darknessTarget > game.darknessState then
+                        game.darknessState + darknessSpeed * dt |> min game.darknessTarget
+                    else
+                        game.darknessState - darknessSpeed * dt |> max game.darknessTarget
+            }
     in
-    List.foldl applyDelta ( { game | entitiesById = updatedEntitiesById, time = game.time + dt }, [] ) deltas
+    List.foldl applyDelta ( updatedGame, [] ) deltas
 
 
 executeAllThinkFunctions : ThinkEnv -> Game -> Id -> Entity -> ( Dict Id Entity, List Delta ) -> ( Dict Id Entity, List Delta )
