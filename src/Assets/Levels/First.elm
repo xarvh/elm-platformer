@@ -21,6 +21,14 @@ droneSpeed =
     2
 
 
+droneAttackRange =
+    1.2
+
+
+droneReloadTime =
+    2
+
+
 droneSize =
     { width = 0.99
     , height = 0.99
@@ -129,14 +137,6 @@ patrol env game entity =
             }
     in
     noDelta { entity | flipX = flipX, velocity = velocity }
-
-
-droneAttackRange =
-    2
-
-
-droneReloadTime =
-    2
 
 
 zapPlayer : ThinkFunction

@@ -5,7 +5,7 @@ import Assets.Tiles
 import Game exposing (..)
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector3 exposing (vec3)
+import Math.Vector3 exposing (Vec3, vec3)
 import Player exposing (ActionState(..))
 import Quad
 import Svgl.Tree exposing (SvglNode, defaultParams, emptyNode)
@@ -354,6 +354,14 @@ deltaPlayer update =
 -- Render
 
 
+flashColor : Game -> Seconds -> Vec3 -> Vec3
+flashColor game finishesAt color =
+    if game.time < finishesAt && periodLinear game.time finishesAt 0.2 < 0.5 then
+        vec3 1 1 1
+    else
+        color
+
+
 render : RenderFunction
 render env game entity =
     if env.overlapsViewport size entity.position then
@@ -363,15 +371,31 @@ render env game entity =
 
             width =
                 size.width * size.height / height
+
+            state =
+                componentState.get entity
+
+            flash =
+                if state == Zapped then
+                    flashColor game (entity.animationStart + zapDuration)
+                else
+                    identity
         in
         Svgl.Tree.rect
             { defaultParams
                 | w = width
                 , h = height
-                , fill = vec3 0 0.7 0
-                , stroke = vec3 0 1 0
+                , fill = flash <| vec3 0 0.7 0
+                , stroke = flash <| vec3 0 1 0
                 , x = entity.position.x
                 , y = entity.position.y
+                , rotate =
+                    if state /= Zapped then
+                        0
+                    else if entity.velocity.x > 0 then
+                        pi / 6
+                    else
+                        -pi / 6
             }
     else
         emptyNode
