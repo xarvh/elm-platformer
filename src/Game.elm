@@ -215,6 +215,29 @@ type Outcome
 
 
 
+-- Delta helpers
+
+
+noDelta : a -> ( a, Delta )
+noDelta a =
+    ( a, DeltaNone )
+
+
+deltaEntity : Id -> (Game -> Entity -> Entity) -> Delta
+deltaEntity entityId updateEntity =
+    let
+        updateGame game =
+            case Dict.get entityId game.entitiesById of
+                Nothing ->
+                    game
+
+                Just entity ->
+                  { game | entitiesById = Dict.insert entityId (updateEntity game entity) game.entitiesById }
+    in
+    DeltaGame updateGame
+
+
+
 -- Map helpers
 
 
@@ -230,11 +253,6 @@ getTileType game { row, column } =
 
 
 -- Game helpers
-
-
-noDelta : a -> ( a, Delta )
-noDelta a =
-    ( a, DeltaNone )
 
 
 createAndInitEntity : (Entity -> Entity) -> Game -> ( Entity, Game )

@@ -22,6 +22,14 @@ lengthSquared v =
     v.x * v.x + v.y * v.y
 
 
+normalize : Vector -> Vector
+normalize v =
+    if v == origin then
+        v
+    else
+        scale (1 / length v) v
+
+
 clampToLength : Float -> Vector -> Vector
 clampToLength maxLength v =
     let

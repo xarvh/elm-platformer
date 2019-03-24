@@ -3,6 +3,7 @@ module Assets.Levels.First exposing (init)
 import Array exposing (Array)
 import Assets.Maps.ThreeWays as M
 import Assets.Tiles
+import Dict exposing (Dict)
 import Game exposing (..)
 import Math.Matrix4 as Mat4
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
@@ -40,6 +41,10 @@ dronePatrolA =
 
 dronePatrolB =
     component.vector "B" Vector.origin
+
+
+canAttackAt =
+    component.float "canAttackAt" 0
 
 
 
@@ -80,6 +85,7 @@ initDrone ( a, b ) entity =
             [ applyGravity
             , moveCollideAndSlide
             , patrol
+            , zapPlayer
             ]
         |> appendRenderFunctions
             [ render
@@ -123,6 +129,43 @@ patrol env game entity =
             }
     in
     noDelta { entity | flipX = flipX, velocity = velocity }
+
+
+droneAttackRange =
+    2
+
+
+droneReloadTime =
+    2
+
+
+zapPlayer : ThinkFunction
+zapPlayer env game droneEntity =
+    if game.time < canAttackAt.get droneEntity then
+        noDelta droneEntity
+    else
+        case Dict.get game.playerId game.entitiesById of
+            Nothing ->
+                noDelta droneEntity
+
+            Just playerEntity ->
+                if Vector.distance droneEntity.position playerEntity.position > droneAttackRange then
+                    noDelta droneEntity
+                else
+                    ( canAttackAt.set (game.time + droneReloadTime) droneEntity
+                    , deltaEntity playerEntity.id (zap droneEntity.position)
+                    )
+
+
+zap : Vector -> Game -> Entity -> Entity
+zap zapOrigin game target =
+    { target
+        | velocity =
+            Vector.sub target.position zapOrigin
+                |> Vector.normalize
+                |> Vector.add (Vector 0 0.2)
+                |> Vector.scale 30
+    }
 
 
 
@@ -181,7 +224,14 @@ render env game entity =
                 , h = 0.3
                 , y = 0.2
             }
-        , List.range 0 2
+        , let
+            charge =
+                1 - (canAttackAt.get entity - game.time) / droneReloadTime
+
+            n =
+                3 * charge |> min 3 |> floor
+          in
+          List.range 0 (n - 1)
             |> List.map (renderLed game entity)
             |> Nest [ translate2 -0.2 0.2 ]
         , List.range 0 5
