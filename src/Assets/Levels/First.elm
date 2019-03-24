@@ -163,14 +163,10 @@ patrol env game entity =
 -- Renders
 
 
-treeToEntities worldToCamera tree =
-    TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tree []
-
-
 render : RenderFunction
 render env game entity =
     if not <| env.overlapsViewport entity.size entity.position then
-        []
+        Svgl.Tree.emptyNode
     else
         [ ellipse
             { defaultParams
@@ -193,7 +189,6 @@ render env game entity =
             |> Nest [ translate2 0 -0.4 ]
         ]
             |> Nest [ translate entity.position ]
-            |> treeToEntities env.worldToCamera
 
 
 renderLed game entity index =

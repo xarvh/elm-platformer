@@ -99,24 +99,21 @@ entities { viewportSize, game } =
             , overlapsViewport = overlapsViewport
             }
 
-        gameEntities =
+        entitiesTree =
             GameMain.render renderEnv game
 
-        collisionEntities =
-            []
-            {-
-            game.entitiesById
-                |> Dict.values
-                |> List.concatMap .tileCollisions
-                |> List.indexedMap (viewCollision worldToCamera)
-                |> List.concat
-            -}
+        {-
+           collisionEntities =
+               game.entitiesById
+                   |> Dict.values
+                   |> List.concatMap .tileCollisions
+                   |> List.indexedMap (viewCollision worldToCamera)
+                   |> List.concat
+        -}
     in
-    List.concat
-        [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree []
-        , gameEntities
-        , collisionEntities
-        ]
+    []
+        |> TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera entitiesTree
+        |> TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree
 
 
 dot : Mat4 -> Vector -> Float -> Vec3 -> Entity

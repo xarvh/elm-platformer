@@ -1,5 +1,7 @@
 module GameMain exposing (..)
 
+import TransformTree exposing (Node(..))
+import Svgl.Tree exposing (SvglNode)
 import Dict exposing (Dict)
 import Game exposing (..)
 import Random
@@ -83,18 +85,18 @@ applyDelta delta ( game, outcomes ) =
 -- Render
 
 
-render : RenderEnv -> Game -> List WebGL.Entity
+render : RenderEnv -> Game -> SvglNode
 render env game =
     game.entitiesById
         |> Dict.foldl (executeAllRenderFunctions env game) []
-        |> List.concat
+        |> Nest []
 
 
-executeAllRenderFunctions : RenderEnv -> Game -> Id -> Entity -> List (List WebGL.Entity) -> List (List WebGL.Entity)
+executeAllRenderFunctions : RenderEnv -> Game -> Id -> Entity -> List SvglNode -> List SvglNode
 executeAllRenderFunctions env game id entity listOfListsAccumulator =
     List.foldr (executeRenderFunction env game entity) listOfListsAccumulator entity.renderScripts
 
 
-executeRenderFunction : RenderEnv -> Game -> Entity -> RenderScript -> List (List WebGL.Entity) -> List (List WebGL.Entity)
+executeRenderFunction : RenderEnv -> Game -> Entity -> RenderScript -> List SvglNode -> List SvglNode
 executeRenderFunction env game entity (RenderScript renderFunction) listOfListsAccumulator =
     renderFunction env game entity :: listOfListsAccumulator

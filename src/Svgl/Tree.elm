@@ -8,8 +8,9 @@ import TransformTree exposing (Node(..))
 import WebGL
 
 
-type alias Svgl =
-    ( PrimitiveShape, Params )
+type Svgl
+    = Svgl PrimitiveShape Params
+    | PureEntity WebGL.Entity
 
 
 type alias SvglNode =
@@ -45,33 +46,43 @@ defaultParams =
     }
 
 
-svglLeafToWebGLEntity : Mat4 -> ( PrimitiveShape, Params ) -> WebGL.Entity
-svglLeafToWebGLEntity parentToCamera ( shape, p ) =
-    Svgl.Primitives.shape
-        shape
-        { defaultUniforms
-            | entityToCamera =
-                parentToCamera
-                    |> Mat4.translate3 p.x p.y p.z
-                    |> Mat4.rotate p.rotate (vec3 0 0 -1)
-            , dimensions = vec2 p.w p.h
-            , fill = p.fill
-            , stroke = p.stroke
-            , strokeWidth = p.strokeWidth
-            , opacity = p.opacity
-        }
+svglLeafToWebGLEntity : Mat4 -> Svgl -> WebGL.Entity
+svglLeafToWebGLEntity parentToCamera svgl =
+    case svgl of
+        PureEntity entity ->
+            entity
+
+        Svgl shape p ->
+            Svgl.Primitives.shape
+                shape
+                { defaultUniforms
+                    | entityToCamera =
+                        parentToCamera
+                            |> Mat4.translate3 p.x p.y p.z
+                            |> Mat4.rotate p.rotate (vec3 0 0 -1)
+                    , dimensions = vec2 p.w p.h
+                    , fill = p.fill
+                    , stroke = p.stroke
+                    , strokeWidth = p.strokeWidth
+                    , opacity = p.opacity
+                }
 
 
 rect : Params -> Node Svgl
 rect params =
-    Leaf ( Rectangle, params )
+    Leaf <| Svgl Rectangle params
 
 
 rightTri : Params -> Node Svgl
 rightTri params =
-    Leaf ( RightTriangle, params )
+    Leaf <| Svgl RightTriangle params
 
 
 ellipse : Params -> Node Svgl
 ellipse params =
-    Leaf ( Ellipse, params )
+    Leaf <| Svgl Ellipse params
+
+
+emptyNode : Node Svgl
+emptyNode =
+    Nest [] []

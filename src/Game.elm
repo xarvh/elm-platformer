@@ -7,6 +7,7 @@ import Dict exposing (Dict)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Player
 import Random
+import Svgl.Tree exposing (SvglNode)
 import TileCollision exposing (Collision)
 import Vector exposing (Vector)
 import Viewport
@@ -163,7 +164,7 @@ type RenderScript
 
 
 type alias RenderFunction =
-    RenderEnv -> Game -> Entity -> List WebGL.Entity
+    RenderEnv -> Game -> Entity -> SvglNode
 
 
 type alias RenderEnv =

@@ -1,5 +1,6 @@
 module PlayerMain exposing (init, setEntityAsPlayer)
 
+import Assets.Gfx
 import Assets.Tiles
 import Game exposing (..)
 import List.Extra
@@ -7,7 +8,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 exposing (vec3)
 import Player exposing (ActionState(..))
 import Quad
-import Svgl.Primitives exposing (defaultUniforms)
+import Svgl.Tree exposing (SvglNode, defaultParams, emptyNode)
 import TileCollision exposing (Collision)
 import Vector exposing (Vector)
 import WebGL
@@ -307,55 +308,21 @@ ceilingHasSpace game entity =
 render : RenderFunction
 render env game entity =
     if env.overlapsViewport size entity.position then
-        [ let
+        let
             height =
                 entity.size.height
 
             width =
                 size.width * size.height / height
-          in
-          Quad.entity (env.entityToCamera entity.position |> Mat4.scale3 width height 1) (vec3 0 1 0)
-        ]
-            ++ beam env game entity
+        in
+        Svgl.Tree.rect
+            { defaultParams
+                | w = width
+                , h = height
+                , fill = vec3 0 0.7 0
+                , stroke = vec3 0 1 0
+                , x = entity.position.x
+                , y = entity.position.y
+            }
     else
-        []
-
-
-beam : RenderEnv -> Game -> Entity -> List WebGL.Entity
-beam env game entity =
-    [ straightBeam 0 entity.position (Vector.add entity.position (Vector 1 5)) env.worldToCamera
-      ]
-
-
-straightBeam : Float -> Vector -> Vector -> Mat4 -> WebGL.Entity
-straightBeam t start end worldToCamera =
-    let
-        difference =
-            Vector.sub end start
-
-        { x, y } =
-            Vector.add start end |> Vector.scale 0.5
-
-        rotate =
-            vectorToAngle difference
-
-        height =
-            Vector.length difference
-
-        width =
-            0.3
-
-        --0.1 * (1 + 3 * t)
-        entityToCamera =
-            worldToCamera
-                |> Mat4.translate3 x y 0
-                |> Mat4.rotate rotate (vec3 0 0 -1)
-                |> Mat4.scale3 width height 1
-    in
-    Svgl.Primitives.rect
-        { defaultUniforms
-            | fill = vec3 1 0 0
-            , strokeWidth = 0
-            , opacity = 0.5 --1 - Ease.outExpo t
-            , entityToCamera = entityToCamera
-        }
+        emptyNode
