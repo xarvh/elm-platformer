@@ -1,4 +1,4 @@
-module PlayerMain exposing (init, setEntityAsPlayer)
+module PlayerMain exposing (deltaZap, init, setEntityAsPlayer)
 
 import Assets.Gfx
 import Assets.Tiles
@@ -16,6 +16,37 @@ import WebGL
 
 component =
     componentNamespace "player"
+
+
+componentDarknessState =
+    component.float "darknessState" 0
+
+
+componentDarknessTarget =
+    component.float "darknessTarget" 0
+
+
+componentState =
+    let
+        c =
+            component.playerActionState "actionState" StandIdle
+
+        set : Game -> ActionState -> Entity -> Entity
+        set game state e =
+            (if state == c.get e then
+                e
+             else
+                { e | animationStart = game.time }
+            )
+                |> c.set state
+    in
+    { get = c.get
+    , set = set
+    }
+
+
+zapDuration =
+    0.6
 
 
 resizeSpeed =
@@ -69,14 +100,6 @@ jumpBoostTime =
 
 
 
--- States
-
-
-componentState =
-    component.playerActionState "state" StandIdle
-
-
-
 -- Init
 
 
@@ -87,11 +110,9 @@ init position entity =
         , size = size
     }
         |> appendThinkFunctions
-            [ applyGravity
-
-            --, applyFriction 3
+            [ moveCollideAndSlide
+            , applyGravity
             , inputMovement
-            , moveCollideAndSlide
             , moveCamera
             ]
         |> appendRenderFunctions
@@ -140,7 +161,9 @@ inputMovement env game entity =
             componentState.get entity
 
         newState =
-            if not onFloor then
+            if oldState == Zapped && game.time - entity.animationStart < zapDuration then
+                Zapped
+            else if not onFloor then
                 -- If not on the floor, you are In The Air...
                 InTheAir
             else if inputJumpDown then
@@ -201,6 +224,9 @@ inputMovement env game entity =
                 Slide ->
                     { oldVelocity | x = oldVelocity.x * (1 - slideFriction * env.dt) }
 
+                Zapped ->
+                    { oldVelocity | x = oldVelocity.x * (1 - airHorizontalFriction * env.dt) }
+
         flipX =
             if env.inputHoldHorizontalMove == -1 then
                 True
@@ -208,12 +234,6 @@ inputMovement env game entity =
                 False
             else
                 entity.flipX
-
-        animationStart =
-            if oldState /= newState then
-                game.time
-            else
-                entity.animationStart
 
         targetHeight =
             if List.member newState [ CrouchIdle, Crawl, Slide ] then
@@ -247,17 +267,16 @@ inputMovement env game entity =
     { entity
         | velocity = newVelocity
         , flipX = flipX
-        , animationStart = animationStart
         , size = { size | height = height }
         , position = newPosition
     }
-        |> componentState.set newState
+        |> componentState.set game newState
         |> noDelta
 
 
 isOnFloor : Game -> Entity -> Bool
 isOnFloor game entity =
-    -- TODO: what if the mob hits the floor at an angle, but then slides out of it?
+    -- TODO: what if the mob hits the floor at an angle, at very high speed, but then slides out of it?
     List.any (\collision -> collision.geometry == Assets.Tiles.Y Assets.Tiles.Decreases) entity.tileCollisions
 
 
@@ -295,10 +314,40 @@ ceilingHasSpace game entity =
                 , start = startPosition
                 , end = endPosition
                 }
-
-        --q = Debug.log "-" (List.map (\c -> (c.tile, c.geometry)) collisions)
     in
     List.all (\collision -> collision.geometry /= Assets.Tiles.Y Assets.Tiles.Increases) collisions
+
+
+deltaIncreaseDarkness : Delta
+deltaIncreaseDarkness =
+    DeltaGame (\game -> { game | darknessTarget = game.darknessTarget + 0.1 |> min 1 })
+
+
+
+-- Exposed deltas
+
+
+deltaZap : Vector -> Delta
+deltaZap zapOrigin =
+    DeltaList
+        [ deltaIncreaseDarkness
+        , deltaPlayer
+            (\game player ->
+                { player
+                    | velocity =
+                        Vector.sub player.position zapOrigin
+                            |> Vector.normalize
+                            |> Vector.add (Vector 0 0.2)
+                            |> Vector.scale 18
+                }
+                    |> componentState.set game Zapped
+            )
+        ]
+
+
+deltaPlayer : (Game -> Entity -> Entity) -> Delta
+deltaPlayer update =
+    DeltaGame (\game -> updateEntity game.playerId update game)
 
 
 

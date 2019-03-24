@@ -8,3 +8,4 @@ type ActionState
     | Run
     | Crawl
     | Slide
+    | Zapped

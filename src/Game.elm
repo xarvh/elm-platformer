@@ -78,6 +78,10 @@ type alias Game =
     , mapHeight : Int
     , mapTiles : Array Assets.Tiles.TileType
 
+    -- TODO use an animation type here
+    , darknessState : Float
+    , darknessTarget : Float
+
     -- System
     , time : Float
     , lastId : Id
@@ -97,6 +101,10 @@ new =
     , mapWidth = 1
     , mapHeight = 1
     , mapTiles = Array.fromList []
+
+    --
+    , darknessState = 0
+    , darknessTarget = 0
 
     --
     , time = 0
@@ -224,17 +232,18 @@ noDelta a =
 
 
 deltaEntity : Id -> (Game -> Entity -> Entity) -> Delta
-deltaEntity entityId updateEntity =
-    let
-        updateGame game =
-            case Dict.get entityId game.entitiesById of
-                Nothing ->
-                    game
+deltaEntity entityId update =
+    DeltaGame (updateEntity entityId update)
 
-                Just entity ->
-                  { game | entitiesById = Dict.insert entityId (updateEntity game entity) game.entitiesById }
-    in
-    DeltaGame updateGame
+
+updateEntity : Id -> (Game -> Entity -> Entity) -> Game -> Game
+updateEntity entityId update game =
+    case Dict.get entityId game.entitiesById of
+        Nothing ->
+            game
+
+        Just entity ->
+            { game | entitiesById = Dict.insert entityId (update game entity) game.entitiesById }
 
 
 

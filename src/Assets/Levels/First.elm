@@ -153,56 +153,11 @@ zapPlayer env game droneEntity =
                     noDelta droneEntity
                 else
                     ( canAttackAt.set (game.time + droneReloadTime) droneEntity
-                    , deltaEntity playerEntity.id (zap droneEntity.position)
+                    , PlayerMain.deltaZap droneEntity.position
                     )
 
 
-zap : Vector -> Game -> Entity -> Entity
-zap zapOrigin game target =
-    { target
-        | velocity =
-            Vector.sub target.position zapOrigin
-                |> Vector.normalize
-                |> Vector.add (Vector 0 0.2)
-                |> Vector.scale 30
-    }
 
-
-
-{-
-   moveAlongSurface : ThinkFunction
-   moveAlongSurface env game entity =
-       case maybeFloor entity of
-           Nothing ->
-               -- TODO add fall animation?
-               noDelta entity
-
-           Just floor ->
-               let
-                   rowColumn =
-                      vecToRowColumn entity.position
-
-                   columnToCheck =
-                       if entity.velocity.x > 0 then
-                           currentColumn + 1
-                       else
-                           currentColumn - 1
-
-                   velocity =
-                       entity.velocity
-               in
-               noDelta <|
-                   if True then
-                       --obstacle or no floor on columnToCheck then
-                       { entity | velocity = { velocity | x = -droneSpeed * sign velocity.x } }
-                   else
-                       entity
-
-
-   maybeFloor : Entity -> Maybe RowColumn
-   maybeFloor entity =
-       Nothing
--}
 -- Renders
 
 
