@@ -1,12 +1,12 @@
 module TransformTree exposing (..)
 
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import Math.Vector3
+import Vector exposing (Vector)
 
 
 type Transform
-    = Translate Vec3
+    = Translate { x : Float, y : Float, z : Float }
     | Rotate Float
 
 
@@ -23,10 +23,10 @@ applyTransform : Transform -> Mat4 -> Mat4
 applyTransform t mat =
     case t of
         Translate v ->
-            Mat4.translate v mat
+            Mat4.translate3 v.x v.y v.z mat
 
         Rotate radians ->
-            Mat4.rotate radians (vec3 0 0 -1) mat
+            Mat4.rotate radians rotationAxis mat
 
 
 resolveAndAppend : (Mat4 -> content -> output) -> Mat4 -> Node content -> List output -> List output
@@ -47,19 +47,24 @@ resolveAndAppend makeOutput transformSoFar node entitiesSoFar =
 -- Helpers
 
 
-translate : Vec2 -> Transform
+rotationAxis : Math.Vector3.Vec3
+rotationAxis =
+    Math.Vector3.vec3 0 0 -1
+
+
+translate : Vector -> Transform
 translate v =
-    Translate (vec3 (Vec2.getX v) (Vec2.getY v) 0)
+    Translate { x = v.x, y = v.y, z = 0 }
 
 
-translateVz : Vec2 -> Float -> Transform
+translateVz : Vector -> Float -> Transform
 translateVz v z =
-    Translate (vec3 (Vec2.getX v) (Vec2.getY v) z)
+    Translate { x = v.x, y = v.y, z = z }
 
 
 translate2 : Float -> Float -> Transform
 translate2 x y =
-    Translate (vec3 x y 0)
+    Translate { x = x, y = y, z = 0 }
 
 
 rotateRad : Float -> Transform

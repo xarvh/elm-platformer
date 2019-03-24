@@ -71,6 +71,13 @@ add a b =
     }
 
 
+sub : Vector -> Vector -> Vector
+sub a b =
+    { x = a.x - b.x
+    , y = a.y - b.y
+    }
+
+
 scale : Float -> Vector -> Vector
 scale l v =
     { x = v.x * l

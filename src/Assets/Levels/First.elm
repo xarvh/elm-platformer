@@ -8,6 +8,8 @@ import Math.Matrix4 as Mat4
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import PlayerMain
 import Quad
+import Svgl.Tree exposing (defaultParams, ellipse, rect)
+import TransformTree exposing (..)
 import Vector exposing (Vector)
 
 
@@ -161,12 +163,76 @@ patrol env game entity =
 -- Renders
 
 
+treeToEntities worldToCamera tree =
+    TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tree []
+
+
 render : RenderFunction
 render env game entity =
-    if env.overlapsViewport entity.size entity.position then
-        [ Quad.entity
-            (env.entityToCamera entity.position |> Mat4.scale3 droneSize.width droneSize.height 1)
-            (vec3 1 0 0)
-        ]
-    else
+    if not <| env.overlapsViewport entity.size entity.position then
         []
+    else
+        [ ellipse
+            { defaultParams
+                | stroke = vec3 1 0.2 0
+                , fill = vec3 0.7 0.1 0
+            }
+        , rect
+            { defaultParams
+                | stroke = vec3 1 0.2 0
+                , fill = vec3 0.1 0.1 0.1
+                , w = 0.6
+                , h = 0.3
+                , y = 0.2
+            }
+        , List.range 0 2
+            |> List.map (renderLed game entity)
+            |> Nest [ translate2 -0.2 0.2 ]
+        , List.range 0 5
+            |> List.map (renderLeg game entity)
+            |> Nest [ translate2 0 -0.4 ]
+        ]
+            |> Nest [ translate entity.position ]
+            |> treeToEntities env.worldToCamera
+
+
+renderLed game entity index =
+    let
+        n =
+            toFloat index
+    in
+    ellipse
+        { defaultParams
+            | fill = vec3 1 0.5 0.5
+            , stroke = vec3 1 0 0
+            , w = 0.18
+            , h = 0.22
+            , x = 0.2 * n
+            , y = 0.03 * periodHarmonic game.time (pi / 1.3 * n) 1
+        }
+
+
+renderLeg game entity index =
+    let
+        xPhase =
+            toFloat index * pi / 5
+
+        x =
+            periodHarmonic game.time xPhase 2
+
+        y =
+            periodHarmonic game.time (xPhase + pi / 2) 1
+    in
+    rect
+        { defaultParams
+            | fill = vec3 0.7 0.1 0
+            , stroke = vec3 1 0.2 0
+            , w = 0.15
+            , h = 0.4
+            , x = 0.4 * x
+            , y =
+                if y > 0 then
+                    0.2 * y
+                else
+                    0
+        }

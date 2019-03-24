@@ -103,11 +103,14 @@ entities { viewportSize, game } =
             GameMain.render renderEnv game
 
         collisionEntities =
+            []
+            {-
             game.entitiesById
                 |> Dict.values
                 |> List.concatMap .tileCollisions
                 |> List.indexedMap (viewCollision worldToCamera)
                 |> List.concat
+            -}
     in
     List.concat
         [ TransformTree.resolveAndAppend Svgl.Tree.svglLeafToWebGLEntity worldToCamera tilesTree []

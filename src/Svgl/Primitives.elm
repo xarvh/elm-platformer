@@ -133,7 +133,8 @@ quadVertexShader =
         varying vec2 cameraPosition;
 
         void main () {
-            localPosition = dimensions * position; //(dimensions + strokeWidth * 2.0) * position;
+            //localPosition = dimensions * position;
+            localPosition = (dimensions + strokeWidth * 2.0) * position;
             gl_Position = entityToCamera * vec4(localPosition, 0, 1);
             cameraPosition = gl_Position.xy;
         }
@@ -263,6 +264,7 @@ ellipseFragmentShader =
           vec3 color = mix(fill, stroke, fillVsStroke);
 
           // darkness effect
+          //vec4 darknessColor = vec4(vec3(max(color.r, max(color.g, color.b))), 1.0);
           vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
           float d = distance(cameraPosition, darknessFocus);
           float i = 0.9 - 0.7 * darknessIntensity;
