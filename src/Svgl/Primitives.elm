@@ -28,7 +28,8 @@ type alias Attributes =
 
 
 type alias Uniforms =
-    { entityToWorld : Mat4
+    { sh : Int
+    , entityToWorld : Mat4
     , worldToCamera : Mat4
     , darknessFocus : Vec2
     , darknessIntensity : Float
@@ -42,7 +43,8 @@ type alias Uniforms =
 
 defaultUniforms : Uniforms
 defaultUniforms =
-    { entityToWorld = Mat4.identity
+    { sh = 0
+    , entityToWorld = Mat4.identity
     , worldToCamera = Mat4.identity
     , darknessFocus = vec2 0 0
     , darknessIntensity = 0
@@ -68,17 +70,17 @@ settings =
 
 rect : Uniforms -> Entity
 rect =
-    WebGL.entityWith settings quadVertexShader rectFragmentShader normalizedQuadMesh
+    WebGL.entityWith settings quadVertexShader fragmentShader normalizedQuadMesh
 
 
 ellipse : Uniforms -> Entity
-ellipse =
-    WebGL.entityWith settings quadVertexShader ellipseFragmentShader normalizedQuadMesh
+ellipse u =
+    WebGL.entityWith settings quadVertexShader fragmentShader normalizedQuadMesh { u | sh = 1 }
 
 
 rightTri : Uniforms -> Entity
 rightTri =
-    WebGL.entityWith settings quadVertexShader rectFragmentShader normalizedRightTriMesh
+    WebGL.entityWith settings quadVertexShader fragmentShader normalizedRightTriMesh
 
 
 shape : PrimitiveShape -> Uniforms -> Entity
@@ -122,9 +124,11 @@ quadVertexShader : Shader Attributes Uniforms Varying
 quadVertexShader =
     [glsl|
         precision mediump float;
+        precision mediump int;
 
         attribute vec2 position;
 
+        uniform int sh;
         uniform mat4 entityToWorld;
         uniform mat4 worldToCamera;
         uniform vec2 dimensions;
@@ -145,11 +149,14 @@ quadVertexShader =
     |]
 
 
-rectFragmentShader : Shader {} Uniforms Varying
-rectFragmentShader =
+
+fragmentShader : Shader {} Uniforms Varying
+fragmentShader =
     [glsl|
         precision mediump float;
+        precision mediump int;
 
+        uniform int sh;
         uniform mat4 entityToWorld;
         uniform mat4 worldToCamera;
         uniform vec2 darknessFocus;
@@ -166,6 +173,8 @@ rectFragmentShader =
         // TODO: transform into `pixelSize`, make it a uniform
         float pixelsPerTile = 30.0;
         float e = 0.5 / pixelsPerTile;
+
+
 
         /*
          *     0               1                            1                     0
@@ -176,46 +185,11 @@ rectFragmentShader =
           return smoothstep(-edge - e, -edge + e, p) - smoothstep(edge - e, edge + e, p);
         }
 
-        void main () {
-          vec2 strokeSize = dimensions / 2.0 + strokeWidth;
-          vec2 fillSize = dimensions / 2.0 - strokeWidth;
-
-          float alpha = mirrorStep(strokeSize.x, localPosition.x) * mirrorStep(strokeSize.y, localPosition.y);
-          float strokeVsFill = mirrorStep(fillSize.x, localPosition.x) * mirrorStep(fillSize.y, localPosition.y);
-          vec3 color = mix(stroke, fill, strokeVsFill);
-
-          // darkness effect
-          vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
-          float d = distance(worldPosition, darknessFocus) / 10.0;
-          float i = 1.0 - 0.9 * darknessIntensity;
-          gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
-        }
-    |]
 
 
-ellipseFragmentShader : Shader {} Uniforms Varying
-ellipseFragmentShader =
-    [glsl|
-        precision mediump float;
-
-        uniform mat4 entityToWorld;
-        uniform mat4 worldToCamera;
-        uniform vec2 darknessFocus;
-        uniform float darknessIntensity;
-        uniform vec2 dimensions;
-        uniform vec3 fill;
-        uniform vec3 stroke;
-        uniform float strokeWidth;
-        uniform float opacity;
-
-        varying vec2 localPosition;
-        varying vec2 worldPosition;
-
-        // TODO: transform into `pixelSize`, make it a uniform
-        float pixelsPerTile = 30.0;
-        float e = 0.5 / pixelsPerTile;
-
-
+        /*
+         * Ellipse
+         */
         float smoothEllipse(vec2 position, vec2 radii) {
           float x = position.x;
           float y = position.y;
@@ -260,20 +234,29 @@ ellipseFragmentShader =
         }
 
 
+
         void main () {
           vec2 strokeSize = dimensions / 2.0 + strokeWidth;
           vec2 fillSize = dimensions / 2.0 - strokeWidth;
 
-          float alpha = 1.0 - smoothEllipse(localPosition, strokeSize);
-          float fillVsStroke = smoothEllipse(localPosition, fillSize);
+          float alpha;
+          float fillVsStroke;
+
+          if (sh == 1) {
+            alpha = 1.0 - smoothEllipse(localPosition, strokeSize);
+            fillVsStroke = smoothEllipse(localPosition, fillSize);
+          } else {
+            alpha = mirrorStep(strokeSize.x, localPosition.x) * mirrorStep(strokeSize.y, localPosition.y);
+            fillVsStroke = 1.0 - mirrorStep(fillSize.x, localPosition.x) * mirrorStep(fillSize.y, localPosition.y);
+          }
 
           vec3 color = mix(fill, stroke, fillVsStroke);
 
+
           // darkness effect
-          //vec4 darknessColor = vec4(vec3(max(color.r, max(color.g, color.b))), 1.0);
           vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
-          float d = distance(worldPosition, darknessFocus);
-          float i = 0.9 - 0.7 * darknessIntensity;
-          gl_FragColor = opacity * mix(alpha * vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
+          float d = distance(worldPosition, darknessFocus) / 10.0;
+          float i = 1.0 - 0.9 * darknessIntensity;
+          gl_FragColor = opacity * alpha * mix(vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
         }
     |]
