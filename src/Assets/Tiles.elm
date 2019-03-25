@@ -13,9 +13,10 @@ platformThickness =
 
 
 type alias TileType =
-    { id : Int
+    { id : Char
     , jumpDown : Bool
     , hasCeilingSpace : Bool
+    , isLadder : Bool
     , render : SvglNode
     , collider : TileCollider SquareCollider
     }
@@ -59,7 +60,7 @@ fixSpeed collisions speed =
 --
 
 
-tilesById : Dict Int TileType
+tilesById : Dict Char TileType
 tilesById =
     [ none
     , transparentBlocker
@@ -67,12 +68,13 @@ tilesById =
     , oneWayPlatform
     , crossedStruts
     , ground
+    , ladder
     ]
         |> List.foldl (\tile accum -> Dict.insert tile.id tile accum) Dict.empty
 
 
-intToTileType : Int -> TileType
-intToTileType id =
+idToTileType : Char -> TileType
+idToTileType id =
     Maybe.withDefault none (Dict.get id tilesById)
 
 
@@ -124,9 +126,10 @@ squareObstacle =
 
 none : TileType
 none =
-    { id = 0
+    { id = ' '
     , jumpDown = False
     , hasCeilingSpace = True
+    , isLadder = False
     , collider = TileCollision.collideNever
     , render = Nest [] []
     }
@@ -134,9 +137,10 @@ none =
 
 transparentBlocker : TileType
 transparentBlocker =
-    { id = 1
+    { id = '\''
     , jumpDown = False
     , hasCeilingSpace = False
+    , isLadder = False
     , collider = squareObstacle
     , render =
         rect
@@ -150,9 +154,10 @@ transparentBlocker =
 
 rivetedBlocker : TileType
 rivetedBlocker =
-    { id = 2
+    { id = '#'
     , jumpDown = False
     , hasCeilingSpace = False
+    , isLadder = False
     , collider = squareObstacle
     , render =
         let
@@ -188,9 +193,10 @@ rivetedBlocker =
 
 oneWayPlatform : TileType
 oneWayPlatform =
-    { id = 3
+    { id = '-'
     , jumpDown = True
     , hasCeilingSpace = True
+    , isLadder = False
     , collider =
         TileCollision.collideWhenXIncreases platformThickness
             |> TileCollision.invertX
@@ -212,14 +218,11 @@ oneWayPlatform =
 
 crossedStruts : TileType
 crossedStruts =
-    { id = 4
+    { id = 'X'
     , jumpDown = False
     , hasCeilingSpace = False
-    , collider =
-        TileCollision.combine
-            [ collideWhenYIncreases
-            , collideWhenYDecreases
-            ]
+    , isLadder = False
+    , collider = squareObstacle
     , render =
         Nest
             []
@@ -259,10 +262,11 @@ crossedStruts =
 
 ground : TileType
 ground =
-    { id = 5
+    { id = '*'
     , collider = squareObstacle
     , jumpDown = False
     , hasCeilingSpace = False
+    , isLadder = False
     , render =
         Nest
             []
@@ -271,5 +275,35 @@ ground =
                     | fill = vec3 0.5 0.3 0.2
                     , stroke = vec3 0.2 0.1 0.1
                 }
+            ]
+    }
+
+
+ladder : TileType
+ladder =
+    { id = 'H'
+    , jumpDown = False
+    , hasCeilingSpace = True
+    , isLadder = True
+    , collider = TileCollision.collideNever
+    , render =
+        let
+            params =
+                { defaultParams
+                    | fill = vec3 0 0.16 1
+                    , stroke = vec3 0.13 0.2 0.5
+                    , strokeWidth = 0.01
+                }
+        in
+        Nest
+            []
+            [ rect { params | w = 0.8, h = 0.1, y = 0.25 }
+            , rect { params | w = 0.8, h = 0.1, y = 0 }
+            , rect { params | w = 0.8, h = 0.1, y = -0.25 }
+            , rect { params | w = 0.8, h = 0.1, y = -0.5 }
+
+            -- side supports
+            , rect { params | w = 0.15, x = -0.35 }
+            , rect { params | w = 0.15, x = 0.35 }
             ]
     }

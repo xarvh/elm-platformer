@@ -64,7 +64,7 @@ init =
     { new
         | mapWidth = M.width
         , mapHeight = M.height
-        , mapTiles = Array.map Assets.Tiles.intToTileType M.tiles
+        , mapTiles = Array.map Assets.Tiles.idToTileType M.tiles
     }
         |> createAndInitEntity (PlayerMain.init M.startingPosition)
         |> PlayerMain.setEntityAsPlayer

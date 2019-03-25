@@ -212,7 +212,7 @@ viewTextDialog viewportSize content =
                 }
           }
             |> Viewport.svgViewBox
-            |> Svg.Attributes.viewBox
+            |> SA.viewBox
         ]
         [ Svg.rect
             [ dialogX |> s |> SA.x
