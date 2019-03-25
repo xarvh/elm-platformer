@@ -9,3 +9,4 @@ type ActionState
     | Crawl
     | Slide
     | Zapped
+    | Climbing

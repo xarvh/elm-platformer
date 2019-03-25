@@ -45,6 +45,10 @@ componentState =
     }
 
 
+climbingSpeed =
+    5
+
+
 zapDuration =
     0.6
 
@@ -163,9 +167,13 @@ inputMovement env game entity =
         newState =
             if oldState == Zapped && game.time - entity.animationStart < zapDuration then
                 Zapped
+            else if env.inputHoldUp && canReachLadder game entity then
+                Climbing
             else if not onFloor then
-                -- If not on the floor, you are In The Air...
-                InTheAir
+                if oldState /= Climbing || env.inputClickJump then
+                    InTheAir
+                else
+                    Climbing
             else if inputJumpDown then
                 if doJumpDown then
                     InTheAir
@@ -226,6 +234,14 @@ inputMovement env game entity =
 
                 Zapped ->
                     { oldVelocity | x = oldVelocity.x * (1 - airHorizontalFriction * env.dt) }
+
+                Climbing ->
+                    if env.inputHoldUp then
+                        { oldVelocity | y = climbingSpeed }
+                    else if env.inputHoldCrouch then
+                        { oldVelocity | y = -climbingSpeed }
+                    else
+                        Vector.origin
 
         flipX =
             if env.inputHoldHorizontalMove == -1 then
@@ -316,6 +332,11 @@ ceilingHasSpace game entity =
                 }
     in
     List.all (\collision -> collision.geometry /= Assets.Tiles.Y Assets.Tiles.Increases) collisions
+
+
+canReachLadder : Game -> Entity -> Bool
+canReachLadder game entity =
+    True
 
 
 deltaIncreaseDarkness : Delta

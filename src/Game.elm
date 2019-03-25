@@ -194,10 +194,10 @@ type alias ThinkFunction =
 
 type alias ThinkEnv =
     { inputHoldHorizontalMove : Int
+    , inputHoldUp : Bool
     , inputHoldCrouch : Bool
     , inputHoldJump : Bool
     , inputClickJump : Bool
-    , inputClickUse : Bool
     , dt : Float
     }
 

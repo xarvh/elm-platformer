@@ -119,10 +119,10 @@ update msg model =
                 thinkEnv =
                     { dt = dtInMilliseconds / 1000
                     , inputHoldHorizontalMove = keyboardArrows.x
+                    , inputHoldUp = held Keyboard.ArrowUp
                     , inputHoldCrouch = keyboardArrows.y == -1
                     , inputHoldJump = held (Keyboard.Character " ")
                     , inputClickJump = clicked (Keyboard.Character " ")
-                    , inputClickUse = clicked Keyboard.ArrowUp
                     }
 
                 ( updatedGame, outcomes ) =
