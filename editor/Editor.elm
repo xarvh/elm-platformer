@@ -209,15 +209,22 @@ updateOnMouseMoveRotate dragging viewportSize model =
                 element_world_position_initial =
                     matToTranslation worldToElement_initial
 
+                viewport =
+                    { pixelSize = viewportSize
+                    , minimumVisibleWorldSize = model.visibleWorldSize
+                    }
+
                 mouse_world_position_initial =
-                    Viewport.pixelToWorld viewportSize model.visibleWorldSize dragging.startingMousePosition
+                    dragging.startingMousePosition
+                        |> Viewport.pixelToWorld viewport
                         |> recordToVec3
 
                 worldToElement_rotation_initial =
                     vectorToAngle (Vec3.sub mouse_world_position_initial element_world_position_initial)
 
                 mouse_world_position_target =
-                    Viewport.pixelToWorld viewportSize model.visibleWorldSize model.mousePosition
+                    model.mousePosition
+                        |> Viewport.pixelToWorld viewport
                         |> recordToVec3
 
                 worldToElement_rotation_target =
@@ -255,12 +262,19 @@ updateOnMouseMoveTranslate dragging viewportSize model =
                 element_world_position_initial =
                     matToTranslation worldToElement_initial
 
+                viewport =
+                    { pixelSize = viewportSize
+                    , minimumVisibleWorldSize = model.visibleWorldSize
+                    }
+
                 mouse_world_position_initial =
-                    Viewport.pixelToWorld viewportSize model.visibleWorldSize dragging.startingMousePosition
+                    dragging.startingMousePosition
+                        |> Viewport.pixelToWorld viewport
                         |> recordToVec3
 
                 mouse_world_position_target =
-                    Viewport.pixelToWorld viewportSize model.visibleWorldSize model.mousePosition
+                    model.mousePosition
+                        |> Viewport.pixelToWorld viewport
                         |> recordToVec3
 
                 mouse_world_dp =
@@ -373,20 +387,6 @@ selectedElementId model =
 -- geo
 
 
-elementToCamerasAndElements : Model -> List ( Mat4, Element )
-elementToCamerasAndElements model =
-    case model.maybeViewportSize of
-        Nothing ->
-            []
-
-        Just viewportSize ->
-            let
-                worldToCamera =
-                    Viewport.worldToCameraTransform viewportSize model.visibleWorldSize
-            in
-            resolvePositions worldToCamera model.elementsById
-
-
 findElementUnderMouse : Model -> Maybe Element
 findElementUnderMouse model =
     case model.maybeViewportSize of
@@ -396,7 +396,11 @@ findElementUnderMouse model =
         Just viewportSize ->
             let
                 mouseWorldPosition =
-                    Viewport.pixelToWorld viewportSize model.visibleWorldSize model.mousePosition
+                    Viewport.pixelToWorld
+                        { pixelSize = viewportSize
+                        , minimumVisibleWorldSize = model.visibleWorldSize
+                        }
+                        model.mousePosition
 
                 mouseWorldPositionVec =
                     vec3 mouseWorldPosition.x mouseWorldPosition.y 0
@@ -634,17 +638,44 @@ view model =
                     maybeSelectedElementId =
                         selectedElementId model
 
-                    renderElement ( elementToCamera, element ) =
-                        elementToWebGLEntity maybeSelectedElementId elementToCamera element
+                    worldToCamera =
+                        Viewport.worldToCameraTransform
+                            { pixelSize = viewportSize
+                            , minimumVisibleWorldSize = model.visibleWorldSize
+                            }
+
+                    renderElement ( elementToWorld, element ) =
+                        elementToWebGLEntity maybeSelectedElementId worldToCamera elementToWorld element
                 in
-                [ elementToCamerasAndElements model
+                [ resolvePositions Mat4.identity model.elementsById
                     |> List.filterMap renderElement
-                    |> Viewport.toFullWindowHtml viewportSize
+                    |> toFullWindowHtml viewportSize
                 , div
                     [ class "overlay" ]
                     [ viewTree model ]
                 ]
     }
+
+
+toFullWindowHtml : Viewport.PixelSize -> List WebGL.Entity -> Html a
+toFullWindowHtml pixelSize entities =
+    div
+        [ style "width" "100vw"
+        , style "height" "100vh"
+        , style "overflow" "hidden"
+        ]
+        [ WebGL.toHtmlWith
+            [ WebGL.alpha True
+            , WebGL.antialias
+            , WebGL.clearColor 0 0 0 1
+            ]
+            [ style "width" "100vw"
+            , style "height" "100vh"
+            , Html.Attributes.width pixelSize.width
+            , Html.Attributes.height pixelSize.height
+            ]
+            entities
+        ]
 
 
 elementColor : Maybe Id -> Element -> Vec3
@@ -655,8 +686,8 @@ elementColor maybeSelectedElementId element =
         element.color
 
 
-elementToWebGLEntity : Maybe Id -> Mat4 -> Element -> Maybe WebGL.Entity
-elementToWebGLEntity maybeSelectedId elementToCamera element =
+elementToWebGLEntity : Maybe Id -> Mat4 -> Mat4 -> Element -> Maybe WebGL.Entity
+elementToWebGLEntity maybeSelectedId worldToCamera elementToWorld element =
     let
         color =
             elementColor maybeSelectedId element
@@ -666,7 +697,8 @@ elementToWebGLEntity maybeSelectedId elementToCamera element =
             (\shape ->
                 Svgl.Primitives.shape shape
                     { defaultUniforms
-                        | entityToCamera = elementToCamera
+                        | entityToWorld = elementToWorld
+                        , worldToCamera = worldToCamera
                         , dimensions = vec2 element.w element.h
                         , fill = Vec3.scale 0.5 color
                         , stroke = color

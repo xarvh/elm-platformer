@@ -18,8 +18,6 @@ module Viewport
 import Browser.Dom
 import Browser.Events
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Svg
-import Svg.Attributes
 import Task
 
 
@@ -186,7 +184,7 @@ onWindowResize msgConstructor =
 -- Svg
 
 
-svgViewBox : Viewport -> Svg.Attribute a
+svgViewBox : Viewport -> String
 svgViewBox viewport =
     let
         { width, height } =
@@ -195,4 +193,3 @@ svgViewBox viewport =
     [ -width / 2, -height / 2, width, height ]
         |> List.map String.fromFloat
         |> String.join " "
-        |> Svg.Attributes.viewBox

@@ -205,13 +205,14 @@ viewTextDialog viewportSize content =
     in
     Svg.svg
         [ SA.class "full-window"
-        , Viewport.svgViewBox
-            { pixelSize = viewportSize
-            , minimumVisibleWorldSize =
+        , { pixelSize = viewportSize
+          , minimumVisibleWorldSize =
                 { width = hudW
                 , height = hudH
                 }
-            }
+          }
+            |> Viewport.svgViewBox
+            |> Svg.Attributes.viewBox
         ]
         [ Svg.rect
             [ dialogX |> s |> SA.x
