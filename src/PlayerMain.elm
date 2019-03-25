@@ -18,15 +18,7 @@ component =
     componentNamespace "player"
 
 
-componentDarknessState =
-    component.float "darknessState" 0
-
-
-componentDarknessTarget =
-    component.float "darknessTarget" 0
-
-
-componentState =
+cState =
     let
         c =
             component.playerActionState "actionState" StandIdle
@@ -142,7 +134,7 @@ moveCamera env game entity =
             q =
                 0
 
-            --Debug.log "" ( componentState.get entity, entity.position )
+            --Debug.log "" ( cState.get entity, entity.position )
         in
         ( entity
         , DeltaGame (\g -> { g | cameraPosition = entity.position })
@@ -162,12 +154,17 @@ inputMovement env game entity =
             onFloor && inputJumpDown && floorAllowsJumpDown game entity
 
         oldState =
-            componentState.get entity
+            cState.get entity
+
+        canClimb =
+            canReachLadder game entity
 
         newState =
             if oldState == Zapped && game.time - entity.animationStart < zapDuration then
                 Zapped
-            else if env.inputHoldUp && canReachLadder game entity then
+            else if oldState == Climbing && not canClimb then
+                InTheAir
+            else if env.inputHoldUp && canClimb then
                 Climbing
             else if not onFloor then
                 if oldState /= Climbing || env.inputClickJump then
@@ -236,12 +233,17 @@ inputMovement env game entity =
                     { oldVelocity | x = oldVelocity.x * (1 - airHorizontalFriction * env.dt) }
 
                 Climbing ->
-                    if env.inputHoldUp then
-                        { oldVelocity | y = climbingSpeed }
-                    else if env.inputHoldCrouch then
-                        { oldVelocity | y = -climbingSpeed }
-                    else
-                        Vector.origin
+                    { x = toFloat env.inputHoldHorizontalMove
+                    , y =
+                        if env.inputHoldUp then
+                            1
+                        else if env.inputHoldCrouch then
+                            -1
+                        else
+                            0
+                    }
+                        |> Vector.normalize
+                        |> Vector.scale climbingSpeed
 
         flipX =
             if env.inputHoldHorizontalMove == -1 then
@@ -286,7 +288,7 @@ inputMovement env game entity =
         , size = { size | height = height }
         , position = newPosition
     }
-        |> componentState.set game newState
+        |> cState.set game newState
         |> noDelta
 
 
@@ -336,7 +338,14 @@ ceilingHasSpace game entity =
 
 canReachLadder : Game -> Entity -> Bool
 canReachLadder game entity =
-    True
+    { start = entity.position
+    , end = entity.position
+    , height = entity.size.height
+    , width = entity.size.width
+    }
+        |> TileCollision.sweep
+        --|> Debug.log (Debug.toString entity.position)
+        |> List.any (getTileType game >> .isLadder)
 
 
 deltaIncreaseDarkness : Delta
@@ -361,7 +370,7 @@ deltaZap zapOrigin =
                             |> Vector.add (Vector 0 0.2)
                             |> Vector.scale 18
                 }
-                    |> componentState.set game Zapped
+                    |> cState.set game Zapped
             )
         ]
 
@@ -394,7 +403,7 @@ render env game entity =
                 size.width * size.height / height
 
             state =
-                componentState.get entity
+                cState.get entity
 
             flash =
                 if state == Zapped then
