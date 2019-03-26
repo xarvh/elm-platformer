@@ -12,12 +12,13 @@ import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
 import Scene
-import Svg
+import Svg exposing (Svg)
 import Svg.Attributes as SA
 import TileCollision
 import Time exposing (Posix)
 import Vector exposing (Vector)
 import Viewport
+import Viewport.Combine
 import WebGL
 
 
@@ -205,14 +206,17 @@ viewTextDialog viewportSize content =
     in
     Svg.svg
         [ SA.class "full-window"
-        , { pixelSize = viewportSize
-          , minimumVisibleWorldSize =
-                { width = hudW
-                , height = hudH
-                }
-          }
-            |> Viewport.svgViewBox
-            |> SA.viewBox
+
+        {-
+           , { pixelSize = viewportSize
+             , minimumVisibleWorldSize =
+                   { width = hudW
+                   , height = hudH
+                   }
+             }
+               |> Viewport.svgViewBox
+               |> SA.viewBox
+        -}
         ]
         [ Svg.rect
             [ dialogX |> s |> SA.x
@@ -259,32 +263,26 @@ view model =
     in
     { title = "Generic platformer"
     , body =
-        [ toFullWindowHtml model.viewportSize entities
-
-        --, viewTextDialog model.viewportSize "LULZ"
+        [ Viewport.Combine.wrapper
+            { viewportSize = model.viewportSize
+            , elementAttributes = []
+            , webglOptions =
+                [ WebGL.alpha True
+                , WebGL.antialias
+                , WebGL.clearColor 0 0 0 1
+                ]
+            , webGlEntities = entities
+            , svgContent =
+                [ Svg.circle
+                    [ SA.r "1"
+                    , SA.fill "red"
+                    , SA.opacity "0.5"
+                    ]
+                    []
+                ]
+            }
         ]
     }
-
-
-toFullWindowHtml : Viewport.PixelSize -> List WebGL.Entity -> Html a
-toFullWindowHtml pixelSize entities =
-    div
-        [ style "width" "100vw"
-        , style "height" "100vh"
-        , style "overflow" "hidden"
-        ]
-        [ WebGL.toHtmlWith
-            [ WebGL.alpha True
-            , WebGL.antialias
-            , WebGL.clearColor 0 0 0 1
-            ]
-            [ style "width" "100vw"
-            , style "height" "100vh"
-            , Html.Attributes.width pixelSize.width
-            , Html.Attributes.height pixelSize.height
-            ]
-            entities
-        ]
 
 
 

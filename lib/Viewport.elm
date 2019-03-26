@@ -13,6 +13,8 @@ module Viewport
         , svgViewBox
         , worldToCameraTransform
         , worldToPixel
+        -- TODO do not expose this one
+        , worldToPixelScale
         )
 
 import Browser.Dom
