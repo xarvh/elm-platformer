@@ -30,17 +30,17 @@ applyTransform t mat =
 
 
 resolveAndAppend : (Mat4 -> content -> output) -> Mat4 -> Node content -> List output -> List output
-resolveAndAppend makeOutput transformSoFar node entitiesSoFar =
+resolveAndAppend makeOutput transformSoFar node accumulator =
     case node of
         Leaf a ->
-            makeOutput transformSoFar a :: entitiesSoFar
+            makeOutput transformSoFar a :: accumulator
 
         Nest transforms children ->
             let
                 newTransform =
                     List.foldl applyTransform transformSoFar transforms
             in
-            List.foldr (resolveAndAppend makeOutput newTransform) entitiesSoFar children
+            List.foldr (resolveAndAppend makeOutput newTransform) accumulator children
 
 
 

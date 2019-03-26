@@ -8,13 +8,12 @@ import TransformTree exposing (Node(..))
 import WebGL
 
 
-type Svgl
-    = Svgl PrimitiveShape Params
-    | PureEntity WebGL.Entity
+type alias Renderable =
+    ( PrimitiveShape, Params )
 
 
-type alias SvglNode =
-    Node Svgl
+type alias TreeNode =
+    Node Renderable
 
 
 type alias Params =
@@ -46,43 +45,37 @@ defaultParams =
     }
 
 
-svglLeafToWebGLEntity : Svgl.Primitives.Uniforms -> Mat4 -> Svgl -> WebGL.Entity
-svglLeafToWebGLEntity defaultUniforms parentToWorld svgl =
-    case svgl of
-        PureEntity entity ->
-            entity
-
-        Svgl shape p ->
-            Svgl.Primitives.shape
-                shape
-                { defaultUniforms
-                    | entityToWorld =
-                        parentToWorld
-                            |> Mat4.translate3 p.x p.y p.z
-                            |> Mat4.rotate p.rotate (vec3 0 0 -1)
-                    , dimensions = vec2 p.w p.h
-                    , fill = p.fill
-                    , stroke = p.stroke
-                    , strokeWidth = p.strokeWidth
-                    , opacity = p.opacity
-                }
+svglLeafToWebGLEntity : Svgl.Primitives.Uniforms -> Mat4 -> Renderable -> WebGL.Entity
+svglLeafToWebGLEntity defaultUniforms parentToWorld ( shape, p ) =
+    Svgl.Primitives.shape shape
+        { defaultUniforms
+            | entityToWorld =
+                parentToWorld
+                    |> Mat4.translate3 p.x p.y p.z
+                    |> Mat4.rotate p.rotate (vec3 0 0 -1)
+            , dimensions = vec2 p.w p.h
+            , fill = p.fill
+            , stroke = p.stroke
+            , strokeWidth = p.strokeWidth
+            , opacity = p.opacity
+        }
 
 
-rect : Params -> Node Svgl
+rect : Params -> TreeNode
 rect params =
-    Leaf <| Svgl Rectangle params
+    Leaf ( Rectangle, params )
 
 
-rightTri : Params -> Node Svgl
+rightTri : Params -> TreeNode
 rightTri params =
-    Leaf <| Svgl RightTriangle params
+    Leaf ( RightTriangle, params )
 
 
-ellipse : Params -> Node Svgl
+ellipse : Params -> TreeNode
 ellipse params =
-    Leaf <| Svgl Ellipse params
+    Leaf ( Ellipse, params )
 
 
-emptyNode : Node Svgl
+emptyNode : TreeNode
 emptyNode =
     Nest [] []

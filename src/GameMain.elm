@@ -2,9 +2,13 @@ module GameMain exposing (..)
 
 import Dict exposing (Dict)
 import Game exposing (..)
+import Math.Matrix4 as Mat4 exposing (Mat4)
 import Random
-import Svgl.Tree exposing (SvglNode)
+import Svg exposing (Svg)
+import Svgl.Primitives exposing (Uniforms)
+import Svgl.Tree
 import TransformTree exposing (Node(..))
+import Vector
 import WebGL
 
 
@@ -13,106 +17,150 @@ darknessSpeed =
 
 
 
--- Think
+-- Init
 
 
-think : ThinkEnv -> Game -> ( Game, List Outcome )
-think env game =
+init : List UpdateFunction -> ( Game, List Outcome )
+init fs =
+    List.foldl (applyOneInitFunction Game.updateEnvNeutral) ( Game.new, [] ) fs
+
+
+applyOneInitFunction : UpdateEnv -> UpdateFunction -> ( Game, List Outcome ) -> ( Game, List Outcome )
+applyOneInitFunction env f ( game, os ) =
+    f env game
+        |> Tuple.mapSecond (\o -> o :: os)
+
+
+
+-- Update
+
+
+update : UpdateEnv -> Game -> ( Game, List Outcome )
+update env game =
+    { game | time = game.time + env.dt }
+        |> updateDarkness env.dt
+        |> updateEntities env
+        |> executeAllLaters env
+
+
+updateDarkness : Seconds -> Game -> Game
+updateDarkness dt game =
+    { game
+        | darknessState =
+            if game.darknessTarget > game.darknessState then
+                game.darknessState + darknessSpeed * dt |> min game.darknessTarget
+            else
+                game.darknessState - darknessSpeed * dt |> max game.darknessTarget
+    }
+
+
+updateEntities : UpdateEnv -> Game -> ( Game, List Outcome )
+updateEntities env game =
+    List.foldl (entityUpdate env Nothing) ( game, [] ) game.rootEntitiesIds
+
+
+entityUpdate : UpdateEnv -> Maybe Parent -> Id -> ( Game, List Outcome ) -> ( Game, List Outcome )
+entityUpdate env maybeParent id ( game, os ) =
+    case Dict.get id game.entitiesById of
+        Nothing ->
+            ( game, os )
+
+        Just entity ->
+            let
+                ( e_, g, o ) =
+                    List.foldl
+                        (entityExecuteOneUpdateFunction env maybeParent)
+                        ( entity, game, os )
+                        entity.wrappedUpdateFunctions
+
+                e =
+                    updateAbsoluteVectors maybeParent e_
+
+                entitiesById =
+                    -- NOTE: if any delta modifies a parent's absolute position, the children's positions will NOT be updated!!!!
+                    Dict.insert id e g.entitiesById
+            in
+            List.foldl
+                (entityUpdate env <| Just <| Parent e)
+                ( { g | entitiesById = entitiesById }
+                , o
+                )
+                e.childrenIds
+
+
+entityExecuteOneUpdateFunction : UpdateEnv -> Maybe Parent -> WrappedUpdateEntityFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
+entityExecuteOneUpdateFunction env maybeParent (WrapEntityFunction f) ( entity, game, os ) =
     let
-        dt =
-            -- Cap the integration interval
-            min env.dt 0.2
+        ( e, w, o ) =
+            f env maybeParent game entity
+    in
+    ( e, w, o :: os )
 
-        ( updatedEntitiesById, deltas ) =
-            game.entitiesById
-                |> Dict.foldl (executeAllThinkFunctions { env | dt = dt } game) ( Dict.empty, [] )
 
-        updatedGame =
-            { game
-                | entitiesById = updatedEntitiesById
-                , time = game.time + dt
-                , darknessState =
-                    if game.darknessTarget > game.darknessState then
-                        game.darknessState + darknessSpeed * dt |> min game.darknessTarget
-                    else
-                        game.darknessState - darknessSpeed * dt |> max game.darknessTarget
+updateAbsoluteVectors : Maybe Parent -> Entity -> Entity
+updateAbsoluteVectors maybeParent entity =
+    case maybeParent of
+        Nothing ->
+            entity
+
+        Just (Parent parent) ->
+            { entity
+                | absolutePosition = Vector.add parent.absolutePosition entity.relativePosition
+                , absoluteVelocity = Vector.add parent.absoluteVelocity entity.relativeVelocity
             }
-    in
-    List.foldl applyDelta ( updatedGame, [] ) deltas
 
 
-executeAllThinkFunctions : ThinkEnv -> Game -> Id -> Entity -> ( Dict Id Entity, List Delta ) -> ( Dict Id Entity, List Delta )
-executeAllThinkFunctions env game id entity ( entitiesById, deltas ) =
+executeAllLaters : UpdateEnv -> ( Game, List Outcome ) -> ( Game, List Outcome )
+executeAllLaters env ( game, os ) =
     let
-        ( updatedEntity, updatedDeltas ) =
-            List.foldl (executeThinkFunction env game) ( entity, deltas ) entity.thinkScripts
+        ( latersToRunNow, latersToRunLater ) =
+            List.partition (\( timestamp, later ) -> timestamp <= game.time) game.laters
+
+        latersDeltas =
+            List.map Tuple.second latersToRunNow
     in
-    ( Dict.insert id updatedEntity entitiesById, updatedDeltas )
+    List.foldl (executeOneLater env) ( { game | laters = latersToRunLater }, os ) latersToRunNow
 
 
-executeThinkFunction : ThinkEnv -> Game -> ThinkScript -> ( Entity, List Delta ) -> ( Entity, List Delta )
-executeThinkFunction env game (ThinkScript function) ( entity, deltas ) =
-    let
-        ( updatedEntity, delta ) =
-            function env game entity
-    in
-    ( updatedEntity
-    , if delta == DeltaNone then
-        deltas
-      else
-        delta :: deltas
-    )
-
-
-applyDelta : Delta -> ( Game, List Outcome ) -> ( Game, List Outcome )
-applyDelta delta ( game, outcomes ) =
-    case delta of
-        DeltaNone ->
-            ( game, outcomes )
-
-        DeltaList list ->
-            List.foldl applyDelta ( game, outcomes ) list
-
-        DeltaGame f ->
-            ( f game, outcomes )
-
-        DeltaOutcome o ->
-            ( game, o :: outcomes )
-
-        DeltaLater delay later ->
-            let
-                laters =
-                    ( game.time + delay, later ) :: game.laters
-            in
-            ( { game | laters = laters }, outcomes )
-
-        DeltaRandom deltaGenerator ->
-            let
-                ( d, seed ) =
-                    Random.step deltaGenerator game.seed
-            in
-            applyDelta d ( { game | seed = seed }, outcomes )
-
-        DeltaNeedsUpdatedGame gameToDelta ->
-            applyDelta (gameToDelta game) ( game, outcomes )
+executeOneLater : UpdateEnv -> ( Seconds, WrappedUpdateFunction ) -> ( Game, List Outcome ) -> ( Game, List Outcome )
+executeOneLater env ( timestamp, WrapFunction f ) ( game, os ) =
+    f env game
+        |> Tuple.mapSecond (\o -> o :: os)
 
 
 
+--
 -- Render
 
 
-render : RenderEnv -> Game -> SvglNode
-render env game =
+type alias RenderOutput =
+    ( List WebGL.Entity, List (Svg Never) )
+
+
+renderEntities : Uniforms -> RenderEnv -> Game -> RenderOutput
+renderEntities baseUniforms env game =
+    let
+        leafToWebGl =
+            Svgl.Tree.svglLeafToWebGLEntity baseUniforms
+
+        executeOneRenderFunction : Entity -> RenderScript -> RenderOutput -> RenderOutput
+        executeOneRenderFunction entity (RenderScript renderFunction) output =
+            case renderFunction env game entity of
+                RenderableNone ->
+                    output
+
+                RenderableTree tree ->
+                    Tuple.mapFirst (TransformTree.resolveAndAppend leafToWebGl Mat4.identity tree) output
+
+                RenderableSvg svg ->
+                    Tuple.mapSecond ((::) svg) output
+
+                RenderableWebGL entities ->
+                    Tuple.mapFirst ((++) entities) output
+
+        executeAllRenderFunctions : Id -> Entity -> RenderOutput -> RenderOutput
+        executeAllRenderFunctions id entity output =
+            List.foldr (executeOneRenderFunction entity) output entity.renderScripts
+    in
     game.entitiesById
-        |> Dict.foldl (executeAllRenderFunctions env game) []
-        |> Nest []
-
-
-executeAllRenderFunctions : RenderEnv -> Game -> Id -> Entity -> List SvglNode -> List SvglNode
-executeAllRenderFunctions env game id entity listOfListsAccumulator =
-    List.foldr (executeRenderFunction env game entity) listOfListsAccumulator entity.renderScripts
-
-
-executeRenderFunction : RenderEnv -> Game -> Entity -> RenderScript -> List SvglNode -> List SvglNode
-executeRenderFunction env game entity (RenderScript renderFunction) listOfListsAccumulator =
-    renderFunction env game entity :: listOfListsAccumulator
+        |> Dict.foldl executeAllRenderFunctions ( [], [] )

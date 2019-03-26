@@ -10,11 +10,8 @@ module Viewport
         , onWindowResize
         , overlaps
         , pixelToWorld
-        , svgViewBox
         , worldToCameraTransform
         , worldToPixel
-        -- TODO do not expose this one
-        , worldToPixelScale
         )
 
 import Browser.Dom
@@ -180,18 +177,3 @@ getWindowSize msgConstructor =
 onWindowResize : (PixelSize -> msg) -> Sub msg
 onWindowResize msgConstructor =
     Browser.Events.onResize (\w h -> msgConstructor { width = w, height = h })
-
-
-
--- Svg
-
-
-svgViewBox : Viewport -> String
-svgViewBox viewport =
-    let
-        { width, height } =
-            actualVisibleWorldSize viewport
-    in
-    [ -width / 2, -height / 2, width, height ]
-        |> List.map String.fromFloat
-        |> String.join " "

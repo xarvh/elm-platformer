@@ -40,7 +40,8 @@ type alias Model =
 
 
 type Msg
-    = OnResize Viewport.PixelSize
+    = Noop
+    | OnResize Viewport.PixelSize
     | OnAnimationFrame Float
     | OnKey Keyboard.Msg
     | OnMouseMove Viewport.PixelPosition
@@ -57,12 +58,16 @@ init flags =
         startingPosition =
             Vector 10 10
 
+        -- TODO do not ignore outcomes?
+        ( game, outcomes ) =
+            GameMain.init Assets.Levels.First.init
+
         model =
             { viewportSize =
                 { width = 640
                 , height = 480
                 }
-            , game = Assets.Levels.First.init
+            , game = game
             , newKeys = []
             , oldKeys = []
             , pause = False
@@ -87,6 +92,9 @@ noCmd model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Noop ->
+            noCmd model
+
         OnResize size ->
             { model | viewportSize = size }
                 |> noCmd
@@ -108,6 +116,10 @@ update msg model =
 
         OnAnimationFrame dtInMilliseconds ->
             let
+                dt =
+                  -- Cap dt to 0.1 second
+                  (min 100 dtInMilliseconds) / 1000
+
                 keyboardArrows =
                     Keyboard.Arrows.arrows model.newKeys
 
@@ -118,7 +130,7 @@ update msg model =
                     List.member key model.newKeys && not (List.member key model.oldKeys)
 
                 thinkEnv =
-                    { dt = dtInMilliseconds / 1000
+                    { dt = dt
                     , inputHoldHorizontalMove = keyboardArrows.x
                     , inputHoldUp = held Keyboard.ArrowUp
                     , inputHoldCrouch = keyboardArrows.y == -1
@@ -127,7 +139,7 @@ update msg model =
                     }
 
                 ( updatedGame, outcomes ) =
-                    GameMain.think thinkEnv model.game
+                    GameMain.update thinkEnv model.game
 
                 -- TODO: do something with the outcomes
             in
@@ -255,7 +267,7 @@ viewTextDialog viewportSize content =
 view : Model -> Browser.Document Msg
 view model =
     let
-        entities =
+        ( webGlEntities, svgContent ) =
             Scene.entities
                 { viewportSize = model.viewportSize
                 , game = model.game
@@ -269,18 +281,14 @@ view model =
             , webglOptions =
                 [ WebGL.alpha True
                 , WebGL.antialias
-                , WebGL.clearColor 0 0 0 1
+                , WebGL.clearColor 0.2 0.2 0.2 1
                 ]
-            , webGlEntities = entities
-            , svgContent =
-                [ Svg.circle
-                    [ SA.r "1"
-                    , SA.fill "red"
-                    , SA.opacity "0.5"
-                    ]
-                    []
-                ]
+            , webGlEntities = webGlEntities
+            , svgContent = List.map (Html.map (\_ -> Noop)) svgContent
             }
+
+        -- Elm reactor does not load the stylesheet...
+        -- TODO, Html.node "style" [] [ Html.text "body: { margin: 0; padding: 0; border: 0; }" ]
         ]
     }
 
