@@ -5,16 +5,43 @@ import Player
 import Vector exposing (Vector)
 
 
+type alias Seconds =
+    Float
+
+
 type Component
     = Bool_ Bool
     | Int_ Int
     | Float_ Float
+    | Seconds_ Seconds
     | Vector_ Vector
     | PlayerActionState Player.ActionState
 
 
 type alias Entity a =
     { a | components : Dict String Component }
+
+
+seconds : String -> String -> Seconds -> { get : Entity a -> Seconds, set : Seconds -> Entity a -> Entity a }
+seconds namespace name default =
+    let
+        key =
+            namespace ++ "/" ++ name
+
+        get e =
+            case Dict.get key e.components of
+                Just (Seconds_ f) ->
+                    f
+
+                _ ->
+                    default
+
+        set v e =
+            { e | components = Dict.insert key (Seconds_ v) e.components }
+    in
+    { get = get
+    , set = set
+    }
 
 
 float : String -> String -> Float -> { get : Entity a -> Float, set : Float -> Entity a -> Entity a }
@@ -131,6 +158,7 @@ componentNamespace namespace =
     { bool = bool namespace
     , int = int namespace
     , float = float namespace
+    , seconds = seconds namespace
     , vector = vector namespace
     , playerActionState = playerActionState namespace
     }

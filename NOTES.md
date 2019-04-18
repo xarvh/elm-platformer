@@ -3,6 +3,7 @@
 - "There is no way out"
 - player respawn: "-sigh-, I guess I have no choice", "I have to try again", "I can't give up" -> resilenza?
 
+- Pause opens modal menu <-> opening modal menu pauses
 
 
 

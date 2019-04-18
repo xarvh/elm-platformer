@@ -66,3 +66,32 @@ moveCollideAndSlide env maybeParent game entity =
         |> setPositionsFromAbsolute maybeParent fixedAbsolutePosition
         |> setVelocitiesFromAbsolute maybeParent fixedAbsoluteVelocity
         |> entityOnly game
+
+
+moveCollide : (Collision Assets.Tiles.SquareCollider -> UpdateEntityFunction) -> UpdateEntityFunction
+moveCollide onCollision env maybeParent game entity =
+    let
+        idealAbsolutePosition =
+            entity.absoluteVelocity
+                |> Vector.scale env.dt
+                |> Vector.add entity.absolutePosition
+
+        maybeCollision =
+            TileCollision.collideOnce
+                (getTileType game >> .collider)
+                { width = entity.size.width
+                , height = entity.size.height
+                , start = entity.absolutePosition
+                , end = idealAbsolutePosition
+                }
+    in
+    case maybeCollision of
+        Nothing ->
+            entity
+                |> setPositionsFromAbsolute maybeParent idealAbsolutePosition
+                |> entityOnly game
+
+        Just collision ->
+            entity
+                |> setPositionsFromAbsolute maybeParent collision.aabbPositionAtImpact
+                |> onCollision collision env maybeParent game

@@ -117,8 +117,8 @@ update msg model =
         OnAnimationFrame dtInMilliseconds ->
             let
                 dt =
-                  -- Cap dt to 0.1 second
-                  (min 100 dtInMilliseconds) / 1000
+                    -- Cap dt to 0.1 second
+                    min 100 dtInMilliseconds / 1000
 
                 keyboardArrows =
                     Keyboard.Arrows.arrows model.newKeys
@@ -136,14 +136,17 @@ update msg model =
                     , inputHoldCrouch = keyboardArrows.y == -1
                     , inputHoldJump = held (Keyboard.Character " ")
                     , inputClickJump = clicked (Keyboard.Character " ")
+                    , inputUseGearClick = clicked Keyboard.Control || clicked Keyboard.Enter
                     }
 
                 ( updatedGame, outcomes ) =
                     GameMain.update thinkEnv model.game
-
-                -- TODO: do something with the outcomes
             in
-            noCmd { model | game = updatedGame }
+            ( { model | game = updatedGame }
+            , outcomes
+                |> List.concatMap executeOutcome
+                |> Cmd.batch
+            )
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
@@ -162,6 +165,31 @@ updateOnKeyChange maybeKeyChange model =
 
         _ ->
             noCmd model
+
+
+
+-- Outcomes
+
+
+executeOutcome : Game.Outcome -> List (Cmd Msg)
+executeOutcome o =
+    case o of
+        Game.OutcomeNone ->
+            []
+
+        Game.OutcomeList os ->
+            List.concatMap executeOutcome os
+
+        Game.OutcomeLog msg ->
+            let
+                _ =
+                    Debug.log "LOG" msg
+            in
+            []
+
+        Game.OutcomeCrash msg ->
+            Debug.todo msg
+
 
 
 -- View

@@ -13,6 +13,7 @@ import Dict exposing (Dict)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Player
 import Random
+import Set exposing (Set)
 import Svg exposing (Svg)
 import Svgl.Tree
 import TileCollision exposing (Collision)
@@ -139,6 +140,7 @@ type alias Entity =
     { id : Id
     , maybeParentId : Maybe Id
     , childrenIds : List Id
+    , tags : Set String
     , spawnedAt : Seconds
     , relativePosition : Vector
     , absolutePosition : Vector
@@ -168,6 +170,7 @@ newEntity__ maybeParentId game =
     { id = game.lastId + 1
     , maybeParentId = maybeParentId
     , childrenIds = []
+    , tags = Set.empty
 
     -- rename to createdAt
     , spawnedAt = game.time
@@ -249,6 +252,8 @@ type alias UpdateFunction =
 type Outcome
     = OutcomeNone
     | OutcomeList (List Outcome)
+    | OutcomeLog String
+    | OutcomeCrash String
 
 
 type WrappedUpdateEntityFunction
@@ -267,6 +272,7 @@ type alias UpdateEnv =
     , inputHoldCrouch : Bool
     , inputHoldJump : Bool
     , inputClickJump : Bool
+    , inputUseGearClick : Bool
     , dt : Float
     }
 
@@ -278,6 +284,7 @@ updateEnvNeutral =
     , inputHoldCrouch = False
     , inputHoldJump = False
     , inputClickJump = False
+    , inputUseGearClick = False
     , dt = 0.01
     }
 
@@ -335,11 +342,6 @@ uEntity id fs env game =
                         List.foldl (entityUpdate_runOneFunction env maybeParent) ( entity, game, [] ) fs
                 in
                 ( { ww | entitiesById = Dict.insert id ee ww.entitiesById }, OutcomeList oo )
-
-
-entityOnly : Game -> Entity -> ( Entity, Game, Outcome )
-entityOnly game entity =
-    ( entity, game, OutcomeNone )
 
 
 uNewEntity : Maybe Id -> List UpdateEntityFunction -> UpdateFunction
@@ -433,6 +435,43 @@ appendThinkFunctions fs entity =
 appendRenderFunctions : List RenderFunction -> Entity -> Entity
 appendRenderFunctions fs entity =
     { entity | renderScripts = entity.renderScripts ++ List.map RenderScript fs }
+
+
+getEntitiesByTag : String -> Game -> List Entity
+getEntitiesByTag tag game =
+    -- TODO rewirte with Dict.foldr to improve performance?
+    game.entitiesById
+        |> Dict.values
+        |> List.filter (\e -> Set.member tag e.tags)
+
+
+entityOnly : Game -> Entity -> ( Entity, Game, Outcome )
+entityOnly game entity =
+    ( entity, game, OutcomeNone )
+
+
+eList : List UpdateEntityFunction -> UpdateEntityFunction
+eList fs env maybeParent game entity =
+    let
+        fold f ( e, g, os ) =
+            f env maybeParent g e
+                |> mapThird (\o -> o :: os)
+    in
+    List.foldl fold ( entity, game, [] ) fs
+        |> mapThird OutcomeList
+
+
+uToE : UpdateFunction -> UpdateEntityFunction
+uToE f env maybeParent game entity =
+    toTriple
+        ( entity
+        , f env game
+        )
+
+
+mapThird : (c -> d) -> ( a, b, c ) -> ( a, b, d )
+mapThird f ( a, b, c ) =
+    ( a, b, f c )
 
 
 

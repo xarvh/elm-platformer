@@ -8,13 +8,19 @@ import Game exposing (..)
 import List.Extra
 import Math.Vector3 exposing (Vec3, vec3)
 import Player exposing (ActionState)
-import Svgl.Tree exposing (defaultParams, emptyNode)
+import Set exposing (Set)
+import Svgl.Tree exposing (defaultParams, ellipse, emptyNode, rect)
 import TileCollision exposing (Collision)
+import TransformTree exposing (..)
 import Vector exposing (Vector)
 
 
 component =
     componentNamespace "player"
+
+
+cCanFireAt =
+    component.seconds "canFireAt" 0
 
 
 cBaloonColor =
@@ -38,6 +44,10 @@ cState =
     { get = c.get
     , set = set
     }
+
+
+reloadTime =
+    1
 
 
 climbingSpeed =
@@ -113,6 +123,7 @@ init position env maybeParent game entity =
             , EntityMain.applyGravity
             , inputMovement
             , moveCamera
+            , inputUseGear
 
             --, debug
             ]
@@ -149,6 +160,23 @@ moveCamera env maybeParent game entity =
         , { game | cameraPosition = entity.absolutePosition }
         , OutcomeNone
         )
+
+
+inputUseGear : UpdateEntityFunction
+inputUseGear env maybeParent game entity =
+    if env.inputUseGearClick && game.time >= cCanFireAt.get entity then
+        toTriple
+            ( entity
+                |> cCanFireAt.set (game.time + reloadTime)
+            , uNewEntity
+                Nothing
+                [ eDecayProjectile entity.absolutePosition entity.flipX
+                ]
+                env
+                game
+            )
+    else
+        entityOnly game entity
 
 
 inputMovement : UpdateEntityFunction
@@ -443,3 +471,53 @@ render env game entity =
             |> RenderableTree
     else
         RenderableNone
+
+
+
+-- Projectile
+
+
+eDecayProjectile : Vector -> Bool -> UpdateEntityFunction
+eDecayProjectile position flipX env maybeParent game entity =
+    let
+        xSign =
+            if flipX then
+                -1
+            else
+                1
+    in
+    { entity
+        | tags = Set.singleton "decay projectile"
+    }
+        |> setPositionsFromAbsolute maybeParent position
+        |> setVelocitiesFromAbsolute maybeParent (Vector (5 * xSign) 0)
+        |> appendThinkFunctions
+            [ EntityMain.moveCollide removeOnTileCollision
+            ]
+        |> appendRenderFunctions
+            [ renderProjectile
+            ]
+        |> entityOnly game
+
+
+removeOnTileCollision : Collision Assets.Tiles.SquareCollider -> UpdateEntityFunction
+removeOnTileCollision collision env maybeParent game entity =
+    -- TODO remove self (this should probably be a helper in the Game module)
+    ( entity, game, OutcomeNone )
+
+
+renderProjectile : RenderFunction
+renderProjectile env game entity =
+    if not <| env.overlapsViewport entity.size entity.absolutePosition then
+        RenderableNone
+    else
+        [ ellipse
+            { defaultParams
+                | stroke = vec3 1 0.2 0
+                , fill = vec3 0.7 0.1 0
+                , w = 0.5
+                , h = 0.5
+            }
+        ]
+            |> Nest [ translate entity.absolutePosition ]
+            |> RenderableTree

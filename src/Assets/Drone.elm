@@ -68,6 +68,7 @@ init ( a, b ) env maybeParent game entity =
             , EntityMain.moveCollideAndSlide
             , patrol
             , zapPlayer
+            , zapProjectile
             ]
         |> appendRenderFunctions
             [ render
@@ -136,6 +137,30 @@ zapPlayer env maybeParent game drone =
                             |> canAttackAt.set (game.time + droneReloadTime)
                         , PlayerMain.uZapPlayer drone.absolutePosition env game
                         )
+
+
+zapProjectile : UpdateEntityFunction
+zapProjectile env maybeParent game drone =
+    let
+        rr =
+            droneAttackRange * droneAttackRange
+
+        projectiles =
+            game
+                |> getEntitiesByTag "decay projectile"
+                |> List.filter (\p -> Vector.distanceSquared drone.absolutePosition p.absolutePosition <= rr)
+    in
+    if projectiles == [] then
+        ( drone, game, OutcomeNone )
+    else
+        toTriple
+            ( drone
+                |> canAttackAt.set (game.time + droneReloadTime)
+            , uList
+                (List.map (\p -> uDeleteEntity p.id) projectiles)
+                env
+                game
+            )
 
 
 

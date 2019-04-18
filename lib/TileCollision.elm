@@ -238,6 +238,27 @@ collide getCollider trajectory =
     recursiveCollide getCollider trajectory []
 
 
+collideOnce : (RowColumn -> TileCollider geometry) -> AbsoluteAabbTrajectory -> Maybe (Collision geometry)
+collideOnce getCollider trajectory =
+    let
+        -- TODO this code duplicates thee one in `recursiveCollide` above.
+        testCollision : RowColumn -> Maybe (Collision geometry)
+        testCollision tile =
+            trajectory
+                |> absoluteToRelativeTrajectory tile
+                |> getCollider tile
+                |> Maybe.map (\collision -> { collision | tile = tile })
+
+        maybeCollision : Maybe (Collision geometry)
+        maybeCollision =
+            sweep trajectory
+                |> List.filterMap testCollision
+                |> List.Extra.minimumBy .distanceSquared
+                |> Maybe.map relativeToAbsoluteCollision
+    in
+    maybeCollision
+
+
 
 -- Colliders
 
