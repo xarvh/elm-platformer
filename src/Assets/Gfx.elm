@@ -5,12 +5,12 @@ module Assets.Gfx exposing (..)
 import Game exposing (..)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 exposing (vec3)
-import Svgl.Tree exposing (SvglNode, defaultParams, rect)
+import Svgl.Tree exposing (TreeNode, defaultParams, rect)
 import Vector exposing (Vector)
 import WebGL
 
 
-straightBeam : Float -> Vector -> Vector -> SvglNode
+straightBeam : Float -> Vector -> Vector -> TreeNode
 straightBeam t start end =
     let
         difference =
@@ -28,7 +28,7 @@ straightBeam t start end =
         width =
             0.3
     in
-    Svgl.Tree.rect
+    rect
         { defaultParams
             | fill = vec3 1 0 0
             , strokeWidth = 0

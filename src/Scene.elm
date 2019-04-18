@@ -13,13 +13,16 @@ import Obstacle
 import Player
 import Quad
 import Set exposing (Set)
+import Svg exposing (Svg)
+import Svg.Attributes
 import Svgl.Primitives exposing (defaultUniforms, rect)
-import Svgl.Tree exposing (SvglNode, ellipse, rect)
+import Svgl.Tree
 import TileCollision exposing (RowColumn)
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 import Viewport exposing (WorldPosition, WorldSize)
-import WebGL exposing (Entity, Mesh, Shader)
+import Viewport.Combine
+import WebGL exposing (Mesh, Shader)
 
 
 visibleRowColumns : Game -> WorldPosition -> WorldSize -> List RowColumn
@@ -54,6 +57,30 @@ visibleRowColumns game { x, y } { width, height } =
 
 
 
+{-
+   arrow : Mat4 -> Game -> Entity -> Svg msg
+   arrow worldToCamera game entity =
+       let
+           a =
+               pi / 8 * periodHarmonic game.time (toFloat entity.id) 1
+
+           entityToCamera =
+               worldToCamera
+                   |> Mat4.translate3 entity.position.x entity.position.y 0
+                   |> Mat4.scale3 1 -1 1
+                   |> Mat4.scale3 0.1 0.1 0.1
+                   |> Mat4.rotate a (vec3 0 0 -1)
+       in
+       Svg.text_
+           [ Svg.Attributes.width "2"
+           , Svg.Attributes.height "0.5"
+           , Svg.Attributes.fill "blue"
+           , Svg.Attributes.stroke "none"
+           , Svg.Attributes.textAnchor "middle"
+           , Viewport.Combine.transform entityToCamera
+           ]
+           [ Svg.text "hello" ]
+-}
 -- WebGL Entities
 
 
@@ -63,10 +90,10 @@ type alias EntitiesArgs =
     }
 
 
-entities : EntitiesArgs -> List Entity
+entities : EntitiesArgs -> ( List WebGL.Entity, List (Svg Never) )
 entities { viewportSize, game } =
     let
-        -- viewport stuff
+        -- Viewport
         viewport =
             { pixelSize = viewportSize
             , minimumVisibleWorldSize = { width = 20, height = 20 }
@@ -83,11 +110,18 @@ entities { viewportSize, game } =
         visibleWorldSize =
             Viewport.actualVisibleWorldSize viewport
 
-        -- webgl entities
-        tilesTree =
-            visibleRowColumns game game.cameraPosition visibleWorldSize
-                |> List.map (renderTile game)
-                |> Nest []
+        -- Entities
+        playerPosition =
+            Dict.get game.playerId game.entitiesById
+                |> Maybe.map .absolutePosition
+                |> Maybe.withDefault Vector.origin
+
+        baseUniforms =
+            { defaultUniforms
+                | worldToCamera = worldToCamera
+                , darknessIntensity = game.darknessState
+                , darknessFocus = Math.Vector2.fromRecord playerPosition
+            }
 
         renderEnv : RenderEnv
         renderEnv =
@@ -96,36 +130,25 @@ entities { viewportSize, game } =
             , overlapsViewport = overlapsViewport
             }
 
-        entitiesTree =
-            GameMain.render renderEnv game
+        ( webGlEntities, svgs ) =
+            GameMain.renderEntities baseUniforms renderEnv game
 
-        playerPosition =
-            Dict.get game.playerId game.entitiesById
-                |> Maybe.map .position
-                |> Maybe.withDefault Vector.origin
-
-        {-
-           collisionEntities =
-               game.entitiesById
-                   |> Dict.values
-                   |> List.concatMap .tileCollisions
-                   |> List.indexedMap (viewCollision worldToCamera)
-                   |> List.concat
-        -}
+        -- Tiles
         leafToWebGl =
-            Svgl.Tree.svglLeafToWebGLEntity
-                { defaultUniforms
-                    | worldToCamera = worldToCamera
-                    , darknessIntensity = game.darknessState
-                    , darknessFocus = Math.Vector2.fromRecord playerPosition
-                }
+            Svgl.Tree.svglLeafToWebGLEntity baseUniforms
+
+        tilesTree =
+            visibleRowColumns game game.cameraPosition visibleWorldSize
+                |> List.map (renderTile game)
+                |> Nest []
     in
-    []
-        |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity entitiesTree
+    ( webGlEntities
         |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree
+    , svgs
+    )
 
 
-dot : Mat4 -> Vector -> Float -> Vec3 -> Entity
+dot : Mat4 -> Vector -> Float -> Vec3 -> WebGL.Entity
 dot worldToViewport { x, y } size color =
     let
         entityToViewport =
@@ -136,7 +159,7 @@ dot worldToViewport { x, y } size color =
     Circle.entity entityToViewport color
 
 
-viewCollision : Mat4 -> Int -> TileCollision.Collision Assets.Tiles.SquareCollider -> List Entity
+viewCollision : Mat4 -> Int -> TileCollision.Collision Assets.Tiles.SquareCollider -> List WebGL.Entity
 viewCollision worldToViewport index collision =
     let
         color =
@@ -155,7 +178,7 @@ viewCollision worldToViewport index collision =
     ]
 
 
-renderTile : Game -> RowColumn -> SvglNode
+renderTile : Game -> RowColumn -> Svgl.Tree.TreeNode
 renderTile game rowColumn =
     Nest
         [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row)

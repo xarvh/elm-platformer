@@ -1,5 +1,11 @@
 module Game exposing (..)
 
+{-
+   NOTE
+
+   Functions ending in `__` are supposed to be private, don't use them outside this module.
+-}
+
 import Array exposing (Array)
 import Assets.Tiles
 import Components
@@ -7,7 +13,8 @@ import Dict exposing (Dict)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Player
 import Random
-import Svgl.Tree exposing (SvglNode)
+import Svg exposing (Svg)
+import Svgl.Tree
 import TileCollision exposing (Collision)
 import Vector exposing (Vector)
 import Viewport
@@ -64,16 +71,20 @@ type alias RowColumn =
 
 
 
--- Game
+-- Game ----------------------------------------------------------------------
 
 
 type alias Game =
     { playerId : Id
+    , entitiesById : Dict Id Entity
+    , rootEntitiesIds : List Id
+    , lastId : Id
+
+    -- Camera
     , cameraPosition : Vector
     , cameraMode : CameraMode
 
-    -- Actual game
-    , entitiesById : Dict Id Entity
+    -- Map
     , mapWidth : Int
     , mapHeight : Int
     , mapTiles : Array Assets.Tiles.TileType
@@ -84,20 +95,23 @@ type alias Game =
 
     -- System
     , time : Float
-    , lastId : Id
     , seed : Random.Seed
-    , laters : List ( Seconds, Delta )
+    , laters : List ( Seconds, WrappedUpdateFunction )
     }
 
 
 new : Game
 new =
     { playerId = 0
+    , entitiesById = Dict.empty
+    , rootEntitiesIds = []
+    , lastId = 0
+
+    --
     , cameraPosition = Vector.origin
     , cameraMode = CameraFollowsPlayer
 
     --
-    , entitiesById = Dict.empty
     , mapWidth = 1
     , mapHeight = 1
     , mapTiles = Array.fromList []
@@ -108,7 +122,6 @@ new =
 
     --
     , time = 0
-    , lastId = 0
     , seed = Random.initialSeed 0
     , laters = []
     }
@@ -119,50 +132,77 @@ type CameraMode
 
 
 
--- Entity
+-- Entity --------------------------------------------------------------------
 
 
 type alias Entity =
     { id : Id
+    , maybeParentId : Maybe Id
+    , childrenIds : List Id
     , spawnedAt : Seconds
+    , relativePosition : Vector
+    , absolutePosition : Vector
+    , relativeVelocity : Vector
+    , absoluteVelocity : Vector
+
+    -- rotation is applied /after/ translation
+    , angleToParent : Angle
 
     --
-    , position : Vector
-    , velocity : Vector
     , size : Size
-    , flipX : Bool
 
     --
     , renderScripts : List RenderScript
-    , thinkScripts : List ThinkScript
+    , wrappedUpdateFunctions : List WrappedUpdateEntityFunction
     , components : Dict String Components.Component
 
     --
     , tileCollisions : List (Collision Assets.Tiles.SquareCollider)
     , animationStart : Seconds
+    , flipX : Bool
     }
 
 
-newEntity : Game -> Entity
-newEntity game =
+newEntity__ : Maybe Id -> Game -> Entity
+newEntity__ maybeParentId game =
     { id = game.lastId + 1
+    , maybeParentId = maybeParentId
+    , childrenIds = []
+
+    -- rename to createdAt
     , spawnedAt = game.time
 
     --
-    , position = Vector.origin
-    , velocity = Vector.origin
+    , relativePosition = Vector.origin
+    , absolutePosition = Vector.origin
+    , relativeVelocity = Vector.origin
+    , absoluteVelocity = Vector.origin
+    , angleToParent = 0
+
+    --
     , size = { width = 0, height = 0 }
-    , flipX = False
 
     --
     , renderScripts = []
-    , thinkScripts = []
+    , wrappedUpdateFunctions = []
     , components = Dict.empty
 
     --
     , tileCollisions = []
     , animationStart = game.time
+    , flipX = False
     }
+
+
+{-| This helps distinguishing a parent entity from the child entity in
+function arguments
+-}
+type Parent
+    = Parent Entity
+
+
+
+-- Render Functions ----------------------------------------------------------
 
 
 {-| This is necessary to avoid a circular dependency between Entity and Game
@@ -171,8 +211,16 @@ type RenderScript
     = RenderScript RenderFunction
 
 
+type Renderable
+    = RenderableNone
+    | RenderableTree Svgl.Tree.TreeNode
+    | RenderableSvg (Svg Never)
+    | RenderableWebGL (List WebGL.Entity)
+
+
 type alias RenderFunction =
-    RenderEnv -> Game -> Entity -> SvglNode
+    -- Only one type of renderable per render function
+    RenderEnv -> Game -> Entity -> Renderable
 
 
 type alias RenderEnv =
@@ -182,17 +230,38 @@ type alias RenderEnv =
     }
 
 
+
+-- Update Functions ----------------------------------------------------------
+
+
 {-| This is necessary to avoid a circular dependency between Entity and Game
 -}
-type ThinkScript
-    = ThinkScript ThinkFunction
+type WrappedUpdateFunction
+    = WrapFunction UpdateFunction
 
 
-type alias ThinkFunction =
-    ThinkEnv -> Game -> Entity -> ( Entity, Delta )
+{-| By convention, they start with `u`
+-}
+type alias UpdateFunction =
+    UpdateEnv -> Game -> ( Game, Outcome )
 
 
-type alias ThinkEnv =
+type Outcome
+    = OutcomeNone
+    | OutcomeList (List Outcome)
+
+
+type WrappedUpdateEntityFunction
+    = WrapEntityFunction UpdateEntityFunction
+
+
+{-| By convention, they start with `e`
+-}
+type alias UpdateEntityFunction =
+    UpdateEnv -> Maybe Parent -> Game -> Entity -> ( Entity, Game, Outcome )
+
+
+type alias UpdateEnv =
     { inputHoldHorizontalMove : Int
     , inputHoldUp : Bool
     , inputHoldCrouch : Bool
@@ -202,47 +271,243 @@ type alias ThinkEnv =
     }
 
 
-
--- Deltas
-
-
-type Delta
-    = DeltaNone
-    | DeltaList (List Delta)
-    | DeltaLater Seconds Delta
-    | DeltaGame (Game -> Game)
-    | DeltaRandom (Random.Generator Delta)
-    | DeltaOutcome Outcome
-      -- This is a way to allow update functions to produce Deltas. Not too happy about it.
-    | DeltaNeedsUpdatedGame (Game -> Delta)
+updateEnvNeutral : UpdateEnv
+updateEnvNeutral =
+    { inputHoldHorizontalMove = 0
+    , inputHoldUp = False
+    , inputHoldCrouch = False
+    , inputHoldJump = False
+    , inputClickJump = False
+    , dt = 0.01
+    }
 
 
-type Outcome
-    = OutcomeSave
+noOut : a -> ( a, Outcome )
+noOut a =
+    ( a, OutcomeNone )
 
 
-
--- Delta helpers
-
-
-noDelta : a -> ( a, Delta )
-noDelta a =
-    ( a, DeltaNone )
+{-| This helps when calling an UpdateFunction functions from within an UpdateEntityFunction
+-}
+toTriple : ( Entity, ( Game, Outcome ) ) -> ( Entity, Game, Outcome )
+toTriple ( e, ( g, o ) ) =
+    ( e, g, o )
 
 
-deltaEntity : Id -> (Game -> Entity -> Entity) -> Delta
-deltaEntity entityId update =
-    DeltaGame (updateEntity entityId update)
+uList : List UpdateFunction -> UpdateFunction
+uList fs env game =
+    let
+        fold f ( w, os ) =
+            f env w |> Tuple.mapSecond (\o -> o :: os)
+    in
+    List.foldl fold ( game, [] ) fs |> Tuple.mapSecond OutcomeList
 
 
-updateEntity : Id -> (Game -> Entity -> Entity) -> Game -> Game
-updateEntity entityId update game =
-    case Dict.get entityId game.entitiesById of
+uLater : Seconds -> UpdateFunction -> UpdateFunction
+uLater delay f env game =
+    noOut { game | laters = ( game.time + delay, WrapFunction f ) :: game.laters }
+
+
+uRandom : Random.Generator UpdateFunction -> UpdateFunction
+uRandom generator env game =
+    let
+        ( f, seed ) =
+            Random.step generator game.seed
+    in
+    f env { game | seed = seed }
+
+
+uEntity : Id -> List UpdateEntityFunction -> UpdateFunction
+uEntity id fs env game =
+    if fs == [] then
+        noOut game
+    else
+        case Dict.get id game.entitiesById of
+            Nothing ->
+                noOut game
+
+            Just entity ->
+                let
+                    maybeParent =
+                        getParent game entity
+
+                    ( ee, ww, oo ) =
+                        List.foldl (entityUpdate_runOneFunction env maybeParent) ( entity, game, [] ) fs
+                in
+                ( { ww | entitiesById = Dict.insert id ee ww.entitiesById }, OutcomeList oo )
+
+
+entityOnly : Game -> Entity -> ( Entity, Game, Outcome )
+entityOnly game entity =
+    ( entity, game, OutcomeNone )
+
+
+uNewEntity : Maybe Id -> List UpdateEntityFunction -> UpdateFunction
+uNewEntity maybeParentId fs env oldGame =
+    let
+        e =
+            newEntity__ maybeParentId oldGame
+
+        ( entity, newGame, outcomes ) =
+            List.foldl
+                (entityUpdate_runOneFunction env <| getParent oldGame e)
+                ( e, { oldGame | lastId = e.id }, [] )
+                fs
+
+        updateParent =
+            case maybeParentId of
+                Nothing ->
+                    identity
+
+                Just parentId ->
+                    -- TODO creation should fail if parent does not exist!
+                    Dict.update parentId (Maybe.map (\p -> { p | childrenIds = entity.id :: p.childrenIds }))
+
+        rootEntitiesIds =
+            case maybeParentId of
+                Nothing ->
+                    entity.id :: newGame.rootEntitiesIds
+
+                Just _ ->
+                    newGame.rootEntitiesIds
+
+        entitiesById =
+            newGame.entitiesById
+                |> Dict.insert entity.id entity
+                |> updateParent
+    in
+    ( { newGame
+        | entitiesById = entitiesById
+        , rootEntitiesIds = rootEntitiesIds
+        , lastId = entity.id
+      }
+    , OutcomeList outcomes
+    )
+
+
+entityUpdate_runOneFunction : UpdateEnv -> Maybe Parent -> UpdateEntityFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
+entityUpdate_runOneFunction env maybeParent f ( entity, game, os ) =
+    let
+        ( e, w, o ) =
+            f env maybeParent game entity
+    in
+    ( e, w, o :: os )
+
+
+uDeleteEntity : Id -> UpdateFunction
+uDeleteEntity id env game =
+    case Dict.get id game.entitiesById of
         Nothing ->
-            game
+            noOut game
 
         Just entity ->
-            { game | entitiesById = Dict.insert entityId (update game entity) game.entitiesById }
+            let
+                removeId =
+                    List.filter (\i -> i /= id)
+
+                removeFromParent =
+                    case getParent game entity of
+                        Nothing ->
+                            \g -> { g | rootEntitiesIds = removeId g.rootEntitiesIds }
+
+                        Just (Parent parent) ->
+                            \g -> { g | entitiesById = Dict.insert parent.id { parent | childrenIds = removeId parent.childrenIds } g.entitiesById }
+
+                removeEntity e entitiesById =
+                    entity.childrenIds
+                        |> List.filterMap (\i -> Dict.get i entitiesById)
+                        |> List.foldl removeEntity (Dict.remove e.id entitiesById)
+            in
+            { game | entitiesById = removeEntity entity game.entitiesById }
+                |> removeFromParent
+                |> noOut
+
+
+{-| TODO rename to appendUpdateFunction
+-}
+appendThinkFunctions : List UpdateEntityFunction -> Entity -> Entity
+appendThinkFunctions fs entity =
+    { entity | wrappedUpdateFunctions = entity.wrappedUpdateFunctions ++ List.map WrapEntityFunction fs }
+
+
+appendRenderFunctions : List RenderFunction -> Entity -> Entity
+appendRenderFunctions fs entity =
+    { entity | renderScripts = entity.renderScripts ++ List.map RenderScript fs }
+
+
+
+-- Relatives & Absolutes
+
+
+getParent : Game -> Entity -> Maybe Parent
+getParent game entity =
+    entity.maybeParentId
+        |> Maybe.andThen (\id -> Dict.get id game.entitiesById)
+        |> Maybe.map Parent
+
+
+setPositionsFromRelative : Maybe Parent -> Vector -> Entity -> Entity
+setPositionsFromRelative maybeParent relativePosition entity =
+    case maybeParent of
+        Nothing ->
+            { entity
+                | absolutePosition = relativePosition
+                , relativePosition = relativePosition
+            }
+
+        Just (Parent parent) ->
+            { entity
+                | absolutePosition = Vector.add relativePosition parent.absolutePosition
+                , relativePosition = relativePosition
+            }
+
+
+setPositionsFromAbsolute : Maybe Parent -> Vector -> Entity -> Entity
+setPositionsFromAbsolute maybeParent absolutePosition entity =
+    case maybeParent of
+        Nothing ->
+            { entity
+                | absolutePosition = absolutePosition
+                , relativePosition = absolutePosition
+            }
+
+        Just (Parent parent) ->
+            { entity
+                | absolutePosition = absolutePosition
+                , relativePosition = Vector.sub absolutePosition parent.absolutePosition
+            }
+
+
+setVelocitiesFromRelative : Maybe Parent -> Vector -> Entity -> Entity
+setVelocitiesFromRelative maybeParent relativeVelocity entity =
+    case maybeParent of
+        Nothing ->
+            { entity
+                | absoluteVelocity = relativeVelocity
+                , relativeVelocity = relativeVelocity
+            }
+
+        Just (Parent parent) ->
+            { entity
+                | absoluteVelocity = Vector.add relativeVelocity parent.absoluteVelocity
+                , relativeVelocity = relativeVelocity
+            }
+
+
+setVelocitiesFromAbsolute : Maybe Parent -> Vector -> Entity -> Entity
+setVelocitiesFromAbsolute maybeParent absoluteVelocity entity =
+    case maybeParent of
+        Nothing ->
+            { entity
+                | absoluteVelocity = absoluteVelocity
+                , relativeVelocity = absoluteVelocity
+            }
+
+        Just (Parent parent) ->
+            { entity
+                | absoluteVelocity = absoluteVelocity
+                , relativeVelocity = Vector.sub absoluteVelocity parent.absoluteVelocity
+            }
 
 
 
@@ -260,42 +525,7 @@ getTileType game { row, column } =
 
 
 
--- Game helpers
-
-
-createAndInitEntity : (Entity -> Entity) -> Game -> ( Entity, Game )
-createAndInitEntity initEntity game =
-    let
-        entity =
-            game
-                |> newEntity
-                |> initEntity
-    in
-    ( entity
-    , { game
-        | entitiesById = Dict.insert entity.id entity game.entitiesById
-        , lastId = entity.id
-      }
-    )
-
-
-deleteEntity : Id -> Game -> Game
-deleteEntity id game =
-    { game | entitiesById = Dict.remove id game.entitiesById }
-
-
-appendThinkFunctions : List ThinkFunction -> Entity -> Entity
-appendThinkFunctions fs entity =
-    { entity | thinkScripts = entity.thinkScripts ++ List.map ThinkScript fs }
-
-
-appendRenderFunctions : List RenderFunction -> Entity -> Entity
-appendRenderFunctions fs entity =
-    { entity | renderScripts = entity.renderScripts ++ List.map RenderScript fs }
-
-
-
--- Time helpers
+-- Animation helpers
 
 
 periodLinear : Seconds -> Float -> Seconds -> Float
@@ -382,58 +612,63 @@ angleToVector angle =
 -- TODO: Stuff that probably should not be here
 
 
-applyGravity : ThinkFunction
-applyGravity env game entity =
-    noDelta
-        { entity
-            | velocity =
-                Vector.add
-                    entity.velocity
-                    { x = 0
-                    , y = -gravity * env.dt
-                    }
-        }
-
-
-applyFriction : Float -> ThinkFunction
-applyFriction friction env game entity =
-    noDelta
-        { entity
-            | velocity =
-                entity.velocity
-                    |> Vector.scale (-friction * env.dt)
-                    |> Vector.add entity.velocity
-        }
-
-
-moveCollideAndSlide : ThinkFunction
-moveCollideAndSlide env game entity =
+applyGravity : UpdateEntityFunction
+applyGravity env maybeParent game entity =
     let
-        idealPosition =
-            entity.velocity
+        absoluteVelocity =
+            Vector.add
+                entity.absoluteVelocity
+                { x = 0
+                , y = -gravity * env.dt
+                }
+    in
+    entity
+        |> setVelocitiesFromAbsolute maybeParent absoluteVelocity
+        |> entityOnly game
+
+
+applyFriction : Float -> UpdateEntityFunction
+applyFriction friction env maybeParent game entity =
+    let
+        absoluteVelocity =
+            entity.absoluteVelocity
+                |> Vector.scale (-friction * env.dt)
+                |> Vector.add entity.relativeVelocity
+    in
+    entity
+        |> setVelocitiesFromAbsolute maybeParent absoluteVelocity
+        |> entityOnly game
+
+
+moveCollideAndSlide : UpdateEntityFunction
+moveCollideAndSlide env maybeParent game entity =
+    let
+        idealAbsolutePosition =
+            entity.absoluteVelocity
                 |> Vector.scale env.dt
-                |> Vector.add entity.position
+                |> Vector.add entity.absolutePosition
 
         collisions =
             TileCollision.collide
                 (getTileType game >> .collider)
                 { width = entity.size.width
                 , height = entity.size.height
-                , start = entity.position
-                , end = idealPosition
+                , start = entity.absolutePosition
+                , end = idealAbsolutePosition
                 }
 
-        fixedPosition =
+        fixedAbsolutePosition =
             case collisions of
                 [] ->
-                    idealPosition
+                    idealAbsolutePosition
 
                 collision :: cs ->
                     collision.fix
+
+        fixedAbsoluteVelocity =
+            Assets.Tiles.fixSpeed collisions entity.absoluteVelocity
     in
-    noDelta
-        { entity
-            | position = fixedPosition
-            , velocity = Assets.Tiles.fixSpeed collisions entity.velocity
-            , tileCollisions = collisions
-        }
+    { entity | tileCollisions = collisions }
+        |> setPositionsFromAbsolute maybeParent fixedAbsolutePosition
+        |> setVelocitiesFromAbsolute maybeParent fixedAbsoluteVelocity
+        |> entityOnly game

@@ -2,7 +2,7 @@ module Assets.Tiles exposing (..)
 
 import Dict exposing (Dict)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Svgl.Tree exposing (SvglNode, defaultParams, ellipse, rect)
+import Svgl.Tree exposing (TreeNode, defaultParams, ellipse, rect)
 import TileCollision exposing (Collision, RowColumn, TileCollider)
 import TransformTree exposing (Node(..))
 import Vector exposing (Vector)
@@ -17,7 +17,7 @@ type alias TileType =
     , jumpDown : Bool
     , hasCeilingSpace : Bool
     , isLadder : Bool
-    , render : SvglNode
+    , render : TreeNode
     , collider : TileCollider SquareCollider
     }
 

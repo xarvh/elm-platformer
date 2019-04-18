@@ -1,27 +1,29 @@
-module PlayerMain exposing (deltaZap, init, setEntityAsPlayer)
+module PlayerMain exposing (init, uZapPlayer)
 
-import Assets.Gfx
 import Assets.Tiles
+import Baloon
+import Dict exposing (Dict)
 import Game exposing (..)
 import List.Extra
-import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 exposing (Vec3, vec3)
-import Player exposing (ActionState(..))
-import Quad
-import Svgl.Tree exposing (SvglNode, defaultParams, emptyNode)
+import Player exposing (ActionState)
+import Svgl.Tree exposing (defaultParams, emptyNode)
 import TileCollision exposing (Collision)
 import Vector exposing (Vector)
-import WebGL
 
 
 component =
     componentNamespace "player"
 
 
+cBaloonColor =
+    Baloon.colorComponent
+
+
 cState =
     let
         c =
-            component.playerActionState "actionState" StandIdle
+            component.playerActionState "actionState" Player.StandIdle
 
         set : Game -> ActionState -> Entity -> Entity
         set game state e =
@@ -99,50 +101,55 @@ jumpBoostTime =
 -- Init
 
 
-init : Vector -> Entity -> Entity
-init position entity =
-    { entity
-        | position = position
-        , size = size
-    }
+init : Vector -> UpdateEntityFunction
+init position env maybeParent game entity =
+    ( { entity
+        | size = size
+      }
+        |> setPositionsFromRelative maybeParent position
         |> appendThinkFunctions
             [ moveCollideAndSlide
             , applyGravity
             , inputMovement
             , moveCamera
+            --, debug
             ]
         |> appendRenderFunctions
             [ render
             ]
+        |> cBaloonColor.set {- TODO -} 2
+    , { game | playerId = entity.id }
+    , OutcomeNone
+    )
 
 
-setEntityAsPlayer : ( Entity, Game ) -> Game
-setEntityAsPlayer ( player, game ) =
-    { game | playerId = player.id }
+debug env maybeParent game entity =
+  let
+      _ = Debug.log "" (entity.relativePosition, entity.absolutePosition)
 
+  in
+  (entity, game, OutcomeNone)
 
 
 -- Think
 
 
-moveCamera : ThinkFunction
-moveCamera env game entity =
+moveCamera : UpdateEntityFunction
+moveCamera env maybeParent game entity =
     if game.cameraMode /= CameraFollowsPlayer then
-        noDelta entity
-    else
-        let
-            q =
-                0
-
-            --Debug.log "" ( cState.get entity, entity.position )
-        in
         ( entity
-        , DeltaGame (\g -> { g | cameraPosition = entity.position })
+        , game
+        , OutcomeNone
+        )
+    else
+        ( entity
+        , { game | cameraPosition = entity.absolutePosition }
+        , OutcomeNone
         )
 
 
-inputMovement : ThinkFunction
-inputMovement env game entity =
+inputMovement : UpdateEntityFunction
+inputMovement env maybeParent game entity =
     let
         onFloor =
             isOnFloor game entity
@@ -160,79 +167,79 @@ inputMovement env game entity =
             canReachLadder game entity
 
         newState =
-            if oldState == Zapped && game.time - entity.animationStart < zapDuration then
-                Zapped
-            else if oldState == Climbing && not canClimb then
-                InTheAir
+            if oldState == Player.Zapped && game.time - entity.animationStart < zapDuration then
+                Player.Zapped
+            else if oldState == Player.Climbing && not canClimb then
+                Player.InTheAir
             else if env.inputHoldUp && canClimb then
-                Climbing
+                Player.Climbing
             else if not onFloor then
-                if oldState /= Climbing || env.inputClickJump then
-                    InTheAir
+                if oldState /= Player.Climbing || env.inputClickJump then
+                    Player.InTheAir
                 else
-                    Climbing
+                    Player.Climbing
             else if inputJumpDown then
                 if doJumpDown then
-                    InTheAir
+                    Player.InTheAir
                 else
                     oldState
-            else if env.inputHoldCrouch && oldState == Slide && abs entity.velocity.x > crawlingSpeed then
+            else if env.inputHoldCrouch && oldState == Player.Slide && abs entity.relativeVelocity.x > crawlingSpeed then
                 -- Keep sliding
-                Slide
+                Player.Slide
             else if env.inputHoldCrouch || not (ceilingHasSpace game entity) then
                 if env.inputHoldHorizontalMove == 0 then
-                    CrouchIdle
-                else if oldState == Run then
-                    Slide
+                    Player.CrouchIdle
+                else if oldState == Player.Run then
+                    Player.Slide
                 else
-                    Crawl
+                    Player.Crawl
             else if env.inputClickJump then
-                InTheAir
+                Player.InTheAir
             else if env.inputHoldHorizontalMove /= 0 then
-                Run
+                Player.Run
             else
-                StandIdle
+                Player.StandIdle
 
         oldVelocity =
-            entity.velocity
+            entity.relativeVelocity
 
-        newVelocity =
+        newRelativeVelocity =
             case newState of
-                InTheAir ->
+                Player.InTheAir ->
                     { x =
                         if env.inputHoldHorizontalMove == 0 then
                             oldVelocity.x * (1 - airHorizontalFriction * env.dt)
                         else
                             toFloat env.inputHoldHorizontalMove * airWalkingSpeed
                     , y =
-                        if env.inputClickJump && (oldState == StandIdle || oldState == Run) then
+                        if env.inputClickJump && (oldState == Player.StandIdle || oldState == Player.Run) then
                             jumpInitialSpeed
-                        else if env.inputHoldJump && oldState == InTheAir && oldVelocity.y > 0 && game.time - entity.animationStart < jumpBoostTime then
+                        else if env.inputHoldJump && oldState == Player.InTheAir && oldVelocity.y > 0 && game.time - entity.animationStart < jumpBoostTime then
                             jumpInitialSpeed
                         else
                             oldVelocity.y
                     }
 
-                StandIdle ->
+                Player.StandIdle ->
                     -- TODO apply A LOT of friction instead?
                     { oldVelocity | x = 0 }
 
-                CrouchIdle ->
+                Player.CrouchIdle ->
                     { oldVelocity | x = 0 }
 
-                Run ->
+                Player.Run ->
                     { oldVelocity | x = toFloat env.inputHoldHorizontalMove * runningSpeed }
 
-                Crawl ->
+                Player.Crawl ->
                     { oldVelocity | x = toFloat env.inputHoldHorizontalMove * crawlingSpeed }
 
-                Slide ->
+                Player.Slide ->
                     { oldVelocity | x = oldVelocity.x * (1 - slideFriction * env.dt) }
 
-                Zapped ->
+                Player.Zapped ->
                     { oldVelocity | x = oldVelocity.x * (1 - airHorizontalFriction * env.dt) }
 
-                Climbing ->
+                Player.Climbing ->
                     { x = toFloat env.inputHoldHorizontalMove
                     , y =
                         if env.inputHoldUp then
@@ -254,7 +261,7 @@ inputMovement env game entity =
                 entity.flipX
 
         targetHeight =
-            if List.member newState [ CrouchIdle, Crawl, Slide ] then
+            if List.member newState [ Player.CrouchIdle, Player.Crawl, Player.Slide ] then
                 0.95
             else
                 size.height
@@ -277,19 +284,21 @@ inputMovement env game entity =
                 0
 
         oldPosition =
-            entity.position
+            entity.relativePosition
 
-        newPosition =
+        newRelativePosition =
             { oldPosition | y = oldPosition.y + yOffsetDueToSizeChange + yOffsetDueToJumpDown }
     in
-    { entity
-        | velocity = newVelocity
-        , flipX = flipX
+    ( { entity
+        | flipX = flipX
         , size = { size | height = height }
-        , position = newPosition
-    }
+      }
+        |> setVelocitiesFromRelative maybeParent newRelativeVelocity
+        |> setPositionsFromRelative maybeParent newRelativePosition
         |> cState.set game newState
-        |> noDelta
+    , game
+    , OutcomeNone
+    )
 
 
 isOnFloor : Game -> Entity -> Bool
@@ -300,13 +309,14 @@ isOnFloor game entity =
 
 floorAllowsJumpDown : Game -> Entity -> Bool
 floorAllowsJumpDown game entity =
+    -- TODO doesn't work when player is on the edge, closer to an empty tile
     case List.Extra.find (\collision -> collision.geometry == Assets.Tiles.Y Assets.Tiles.Decreases) entity.tileCollisions of
         Nothing ->
             False
 
         Just collision ->
             { row = collision.tile.row
-            , column = coordinateToTile entity.position.x
+            , column = coordinateToTile entity.absolutePosition.x
             }
                 |> getTileType game
                 |> .jumpDown
@@ -319,7 +329,7 @@ ceilingHasSpace : Game -> Entity -> Bool
 ceilingHasSpace game entity =
     let
         startPosition =
-            entity.position
+            entity.absolutePosition
 
         endPosition =
             { startPosition | y = startPosition.y + (size.height - entity.size.height) / 2 }
@@ -338,46 +348,46 @@ ceilingHasSpace game entity =
 
 canReachLadder : Game -> Entity -> Bool
 canReachLadder game entity =
-    { start = entity.position
-    , end = entity.position
+    { start = entity.absolutePosition
+    , end = entity.absolutePosition
     , height = entity.size.height
     , width = entity.size.width
     }
         |> TileCollision.sweep
-        --|> Debug.log (Debug.toString entity.position)
         |> List.any (getTileType game >> .isLadder)
 
 
-deltaIncreaseDarkness : Delta
-deltaIncreaseDarkness =
-    DeltaGame (\game -> { game | darknessTarget = game.darknessTarget + 0.1 |> min 1 })
+uIncreaseDarkness : UpdateFunction
+uIncreaseDarkness env game =
+    noOut { game | darknessTarget = game.darknessTarget + 0.1 |> min 1 }
 
 
 
 -- Exposed deltas
 
 
-deltaZap : Vector -> Delta
-deltaZap zapOrigin =
-    DeltaList
-        [ deltaIncreaseDarkness
-        , deltaPlayer
-            (\game player ->
-                { player
-                    | velocity =
-                        Vector.sub player.position zapOrigin
+uZapPlayer : Vector -> UpdateFunction
+uZapPlayer zapOrigin =
+    uList
+        [ uIncreaseDarkness
+        , uPlayer
+            [ \env maybeParent game player ->
+                player
+                    |> cState.set game Player.Zapped
+                    |> setVelocitiesFromRelative maybeParent
+                        (Vector.sub player.absolutePosition zapOrigin
                             |> Vector.normalize
                             |> Vector.add (Vector 0 0.2)
                             |> Vector.scale 18
-                }
-                    |> cState.set game Zapped
-            )
+                        )
+                    |> entityOnly game
+            ]
         ]
 
 
-deltaPlayer : (Game -> Entity -> Entity) -> Delta
-deltaPlayer update =
-    DeltaGame (\game -> updateEntity game.playerId update game)
+uPlayer : List UpdateEntityFunction -> UpdateFunction
+uPlayer fs env game =
+    uEntity game.playerId fs env game
 
 
 
@@ -394,7 +404,7 @@ flashColor game finishesAt color =
 
 render : RenderFunction
 render env game entity =
-    if env.overlapsViewport size entity.position then
+    if env.overlapsViewport size entity.absolutePosition then
         let
             height =
                 entity.size.height
@@ -406,7 +416,7 @@ render env game entity =
                 cState.get entity
 
             flash =
-                if state == Zapped then
+                if state == Player.Zapped then
                     flashColor game (entity.animationStart + zapDuration)
                 else
                     identity
@@ -417,15 +427,16 @@ render env game entity =
                 , h = height
                 , fill = flash <| vec3 0 0.7 0
                 , stroke = flash <| vec3 0 1 0
-                , x = entity.position.x
-                , y = entity.position.y
+                , x = entity.absolutePosition.x
+                , y = entity.absolutePosition.y
                 , rotate =
-                    if state /= Zapped then
+                    if state /= Player.Zapped then
                         0
-                    else if entity.velocity.x > 0 then
+                    else if entity.relativeVelocity.x > 0 then
                         pi / 6
                     else
                         -pi / 6
             }
+            |> RenderableTree
     else
-        emptyNode
+        RenderableNone

@@ -12,12 +12,13 @@ import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
 import Scene
-import Svg
+import Svg exposing (Svg)
 import Svg.Attributes as SA
 import TileCollision
 import Time exposing (Posix)
 import Vector exposing (Vector)
 import Viewport
+import Viewport.Combine
 import WebGL
 
 
@@ -39,7 +40,8 @@ type alias Model =
 
 
 type Msg
-    = OnResize Viewport.PixelSize
+    = Noop
+    | OnResize Viewport.PixelSize
     | OnAnimationFrame Float
     | OnKey Keyboard.Msg
     | OnMouseMove Viewport.PixelPosition
@@ -56,12 +58,16 @@ init flags =
         startingPosition =
             Vector 10 10
 
+        -- TODO do not ignore outcomes?
+        ( game, outcomes ) =
+            GameMain.init Assets.Levels.First.init
+
         model =
             { viewportSize =
                 { width = 640
                 , height = 480
                 }
-            , game = Assets.Levels.First.init
+            , game = game
             , newKeys = []
             , oldKeys = []
             , pause = False
@@ -86,6 +92,9 @@ noCmd model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Noop ->
+            noCmd model
+
         OnResize size ->
             { model | viewportSize = size }
                 |> noCmd
@@ -107,6 +116,10 @@ update msg model =
 
         OnAnimationFrame dtInMilliseconds ->
             let
+                dt =
+                  -- Cap dt to 0.1 second
+                  (min 100 dtInMilliseconds) / 1000
+
                 keyboardArrows =
                     Keyboard.Arrows.arrows model.newKeys
 
@@ -117,7 +130,7 @@ update msg model =
                     List.member key model.newKeys && not (List.member key model.oldKeys)
 
                 thinkEnv =
-                    { dt = dtInMilliseconds / 1000
+                    { dt = dt
                     , inputHoldHorizontalMove = keyboardArrows.x
                     , inputHoldUp = held Keyboard.ArrowUp
                     , inputHoldCrouch = keyboardArrows.y == -1
@@ -126,7 +139,7 @@ update msg model =
                     }
 
                 ( updatedGame, outcomes ) =
-                    GameMain.think thinkEnv model.game
+                    GameMain.update thinkEnv model.game
 
                 -- TODO: do something with the outcomes
             in
@@ -205,14 +218,17 @@ viewTextDialog viewportSize content =
     in
     Svg.svg
         [ SA.class "full-window"
-        , { pixelSize = viewportSize
-          , minimumVisibleWorldSize =
-                { width = hudW
-                , height = hudH
-                }
-          }
-            |> Viewport.svgViewBox
-            |> SA.viewBox
+
+        {-
+           , { pixelSize = viewportSize
+             , minimumVisibleWorldSize =
+                   { width = hudW
+                   , height = hudH
+                   }
+             }
+               |> Viewport.svgViewBox
+               |> SA.viewBox
+        -}
         ]
         [ Svg.rect
             [ dialogX |> s |> SA.x
@@ -251,7 +267,7 @@ viewTextDialog viewportSize content =
 view : Model -> Browser.Document Msg
 view model =
     let
-        entities =
+        ( webGlEntities, svgContent ) =
             Scene.entities
                 { viewportSize = model.viewportSize
                 , game = model.game
@@ -259,32 +275,22 @@ view model =
     in
     { title = "Generic platformer"
     , body =
-        [ toFullWindowHtml model.viewportSize entities
+        [ Viewport.Combine.wrapper
+            { viewportSize = model.viewportSize
+            , elementAttributes = []
+            , webglOptions =
+                [ WebGL.alpha True
+                , WebGL.antialias
+                , WebGL.clearColor 0.2 0.2 0.2 1
+                ]
+            , webGlEntities = webGlEntities
+            , svgContent = List.map (Html.map (\_ -> Noop)) svgContent
+            }
 
-        --, viewTextDialog model.viewportSize "LULZ"
+        -- Elm reactor does not load the stylesheet...
+        -- TODO, Html.node "style" [] [ Html.text "body: { margin: 0; padding: 0; border: 0; }" ]
         ]
     }
-
-
-toFullWindowHtml : Viewport.PixelSize -> List WebGL.Entity -> Html a
-toFullWindowHtml pixelSize entities =
-    div
-        [ style "width" "100vw"
-        , style "height" "100vh"
-        , style "overflow" "hidden"
-        ]
-        [ WebGL.toHtmlWith
-            [ WebGL.alpha True
-            , WebGL.antialias
-            , WebGL.clearColor 0 0 0 1
-            ]
-            [ style "width" "100vw"
-            , style "height" "100vh"
-            , Html.Attributes.width pixelSize.width
-            , Html.Attributes.height pixelSize.height
-            ]
-            entities
-        ]
 
 
 

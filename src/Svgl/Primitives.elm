@@ -149,7 +149,6 @@ quadVertexShader =
     |]
 
 
-
 fragmentShader : Shader {} Uniforms Varying
 fragmentShader =
     [glsl|
