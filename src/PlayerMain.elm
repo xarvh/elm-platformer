@@ -3,6 +3,7 @@ module PlayerMain exposing (init, uZapPlayer)
 import Assets.Tiles
 import Baloon
 import Dict exposing (Dict)
+import EntityMain
 import Game exposing (..)
 import List.Extra
 import Math.Vector3 exposing (Vec3, vec3)
@@ -108,10 +109,11 @@ init position env maybeParent game entity =
       }
         |> setPositionsFromRelative maybeParent position
         |> appendThinkFunctions
-            [ moveCollideAndSlide
-            , applyGravity
+            [ EntityMain.moveCollideAndSlide
+            , EntityMain.applyGravity
             , inputMovement
             , moveCamera
+
             --, debug
             ]
         |> appendRenderFunctions
@@ -124,11 +126,12 @@ init position env maybeParent game entity =
 
 
 debug env maybeParent game entity =
-  let
-      _ = Debug.log "" (entity.relativePosition, entity.absolutePosition)
+    let
+        _ =
+            Debug.log "" ( entity.relativePosition, entity.absolutePosition )
+    in
+    ( entity, game, OutcomeNone )
 
-  in
-  (entity, game, OutcomeNone)
 
 
 -- Think

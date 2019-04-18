@@ -1,6 +1,7 @@
 module Assets.Drone exposing (init)
 
 import Dict exposing (Dict)
+import EntityMain
 import Game exposing (..)
 import Math.Vector3 as Vec3 exposing (vec3)
 import PlayerMain
@@ -63,8 +64,8 @@ init ( a, b ) env maybeParent game entity =
         |> dronePatrolA.set a
         |> dronePatrolB.set b
         |> appendThinkFunctions
-            [ applyGravity
-            , moveCollideAndSlide
+            [ EntityMain.applyGravity
+            , EntityMain.moveCollideAndSlide
             , patrol
             , zapPlayer
             ]
