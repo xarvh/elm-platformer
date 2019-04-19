@@ -122,6 +122,7 @@ baloon env game entity =
             , SA.y "-1.5"
             , SA.style "font-size: 1"
             , SA.textLength <| String.fromFloat textW
+            , SA.class "speech-baloon"
             ]
             [ Svg.text content ]
         ]

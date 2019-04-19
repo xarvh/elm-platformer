@@ -164,103 +164,6 @@ updateOnKeyChange maybeKeyChange model =
             noCmd model
 
 
-
--- UI HUD
-
-
-viewTextDialog : Viewport.PixelSize -> String -> Html Msg
-viewTextDialog viewportSize content =
-    let
-        s =
-            String.fromFloat
-
-        hudW =
-            12
-
-        hudH =
-            12
-
-        hhW =
-            hudW / 2
-
-        hhH =
-            hudH / 2
-
-        margin =
-            1
-
-        dialogW =
-            hudW - 2 * margin
-
-        dialogH =
-            4
-
-        cornerRadius =
-            0.3
-
-        dialogX =
-            -hudW / 2 + margin
-
-        dialogY =
-            hudH / 2 - margin - dialogH
-
-        fontHeight =
-            0.5
-
-        lineHeight =
-            fontHeight
-
-        textX =
-            dialogX + cornerRadius
-
-        textY row =
-            dialogY + cornerRadius + (1 + row) * lineHeight
-    in
-    Svg.svg
-        [ SA.class "full-window"
-
-        {-
-           , { pixelSize = viewportSize
-             , minimumVisibleWorldSize =
-                   { width = hudW
-                   , height = hudH
-                   }
-             }
-               |> Viewport.svgViewBox
-               |> SA.viewBox
-        -}
-        ]
-        [ Svg.rect
-            [ dialogX |> s |> SA.x
-            , dialogY |> s |> SA.y
-            , dialogW |> s |> SA.width
-            , dialogH |> s |> SA.height
-            , cornerRadius |> s |> SA.ry
-            , SA.fill "rgba(50, 50, 255, 0.9)"
-            , SA.stroke "rgb(150, 150, 150)"
-            , SA.strokeWidth "0.2"
-            ]
-            []
-        , Svg.text_
-            [ textX |> s |> SA.x
-            , textY 0 |> s |> SA.y
-            , SA.fill "rgb(250, 250, 255)"
-            , SA.stroke "none" --rgb(250, 250, 150)"
-            , SA.class "dialog-text"
-            ]
-            [ Svg.text "This is super annoying" ]
-        , Svg.text_
-            [ textX |> s |> SA.x
-            , textY 1 |> s |> SA.y
-            , SA.fill "rgb(250, 250, 255)"
-            , SA.stroke "none" --rgb(250, 250, 150)"
-            , SA.class "dialog-text"
-            ]
-            [ Svg.text "This too is super annoying" ]
-        ]
-
-
-
 -- View
 
 
@@ -286,9 +189,6 @@ view model =
             , webGlEntities = webGlEntities
             , svgContent = List.map (Html.map (\_ -> Noop)) svgContent
             }
-
-        -- Elm reactor does not load the stylesheet...
-        -- TODO, Html.node "style" [] [ Html.text "body: { margin: 0; padding: 0; border: 0; }" ]
         ]
     }
 

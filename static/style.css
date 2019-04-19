@@ -1,19 +1,40 @@
-body {
-    margin: 0;
-    padding: 0;
+/* From: https://fontlibrary.org/en/font/comic-relief */
+@font-face {
+  font-family: 'ComicReliefBold';
+  src: url('ComicReliefBold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
 }
 
-.full-window {
-  position: absolute;
-  top: 0;
-  left: 0;
+@font-face {
+  font-family: 'ComicReliefRegular';
+  src: url('ComicReliefRegular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+
+/* From: https://fontlibrary.org/en/font/saarland */
+@font-face {
+  font-family: 'SaarlandMedium';
+  src: url('SaarlandMedium.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+
+body {
+  margin: 0;
+  padding: 0;
+
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+
+  font-family: 'SaarlandMedium', sans-serif;
 }
 
 
-.dialog-text {
-    font-size: 0.5px;
-    font-family: monospace, monospace;
+.speech-baloon {
+  font-family: 'ComicReliefRegular';
 }
