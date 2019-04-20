@@ -7,7 +7,6 @@ module Game exposing (..)
 -}
 
 import Array exposing (Array)
-import Assets.Tiles
 import Components
 import Dict exposing (Dict)
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -17,6 +16,7 @@ import Set exposing (Set)
 import Svg exposing (Svg)
 import Svgl.Tree
 import TileCollision exposing (Collision)
+import Tiles exposing (SquareCollider, TileType)
 import Vector exposing (Vector)
 import Viewport
 import WebGL
@@ -88,7 +88,7 @@ type alias Game =
     -- Map
     , mapWidth : Int
     , mapHeight : Int
-    , mapTiles : Array Assets.Tiles.TileType
+    , mapTiles : Array TileType
 
     -- TODO use an animation type here
     , darknessState : Float
@@ -159,7 +159,7 @@ type alias Entity =
     , components : Dict String Components.Component
 
     --
-    , tileCollisions : List (Collision Assets.Tiles.SquareCollider)
+    , tileCollisions : List (Collision SquareCollider)
     , animationStart : Seconds
     , flipX : Bool
     }
@@ -553,14 +553,14 @@ setVelocitiesFromAbsolute maybeParent absoluteVelocity entity =
 -- Map helpers
 
 
-getTileType : Game -> RowColumn -> Assets.Tiles.TileType
+getTileType : Game -> RowColumn -> TileType
 getTileType game { row, column } =
     case Array.get (column + (game.mapHeight - row - 1) * game.mapWidth) game.mapTiles of
         Just tileType ->
             tileType
 
         Nothing ->
-            Assets.Tiles.none
+            Tiles.none
 
 
 

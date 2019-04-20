@@ -1,4 +1,4 @@
-module Assets.Maps.ThreeWays exposing (..)
+module Maps.ThreeWays exposing (..)
 
 import Array exposing (Array)
 import Vector exposing (Vector)

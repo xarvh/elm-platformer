@@ -1,6 +1,5 @@
 module PlayerMain exposing (init, uZapPlayer)
 
-import Assets.Tiles
 import Baloon
 import Dict exposing (Dict)
 import EntityMain
@@ -11,6 +10,7 @@ import Player exposing (ActionState)
 import Set exposing (Set)
 import Svgl.Tree exposing (defaultParams, ellipse, emptyNode, rect)
 import TileCollision exposing (Collision)
+import Tiles exposing (SquareCollider)
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 
@@ -310,7 +310,7 @@ inputMovement env maybeParent game entity =
 
         yOffsetDueToJumpDown =
             if doJumpDown then
-                0 - Assets.Tiles.platformThickness - 0.01
+                0 - Tiles.platformThickness - 0.01
             else
                 0
 
@@ -335,13 +335,13 @@ inputMovement env maybeParent game entity =
 isOnFloor : Game -> Entity -> Bool
 isOnFloor game entity =
     -- TODO: what if the mob hits the floor at an angle, at very high speed, but then slides out of it?
-    List.any (\collision -> collision.geometry == Assets.Tiles.Y Assets.Tiles.Decreases) entity.tileCollisions
+    List.any (\collision -> collision.geometry == Tiles.Y Tiles.Decreases) entity.tileCollisions
 
 
 floorAllowsJumpDown : Game -> Entity -> Bool
 floorAllowsJumpDown game entity =
     -- TODO doesn't work when player is on the edge, closer to an empty tile
-    case List.Extra.find (\collision -> collision.geometry == Assets.Tiles.Y Assets.Tiles.Decreases) entity.tileCollisions of
+    case List.Extra.find (\collision -> collision.geometry == Tiles.Y Tiles.Decreases) entity.tileCollisions of
         Nothing ->
             False
 
@@ -374,7 +374,7 @@ ceilingHasSpace game entity =
                 , end = endPosition
                 }
     in
-    List.all (\collision -> collision.geometry /= Assets.Tiles.Y Assets.Tiles.Increases) collisions
+    List.all (\collision -> collision.geometry /= Tiles.Y Tiles.Increases) collisions
 
 
 canReachLadder : Game -> Entity -> Bool
@@ -500,7 +500,7 @@ eDecayProjectile position flipX env maybeParent game entity =
         |> entityOnly game
 
 
-removeOnTileCollision : Collision Assets.Tiles.SquareCollider -> UpdateEntityFunction
+removeOnTileCollision : Collision SquareCollider -> UpdateEntityFunction
 removeOnTileCollision collision env maybeParent game entity =
     -- TODO remove self (this should probably be a helper in the Game module)
     ( entity, game, OutcomeNone )

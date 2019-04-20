@@ -1,4 +1,4 @@
-module Assets.DemoLevel exposing (..)
+module Maps.DemoLevel exposing (..)
 
 import Array exposing (Array)
 

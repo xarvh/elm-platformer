@@ -1,6 +1,5 @@
 module Scene exposing (..)
 
-import Assets.Tiles
 import Circle
 import Dict exposing (Dict)
 import Game exposing (..)
@@ -18,6 +17,7 @@ import Svg.Attributes
 import Svgl.Primitives exposing (defaultUniforms, rect)
 import Svgl.Tree
 import TileCollision exposing (RowColumn)
+import Tiles exposing (SquareCollider)
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 import Viewport exposing (WorldPosition, WorldSize)
@@ -159,7 +159,7 @@ dot worldToViewport { x, y } size color =
     Circle.entity entityToViewport color
 
 
-viewCollision : Mat4 -> Int -> TileCollision.Collision Assets.Tiles.SquareCollider -> List WebGL.Entity
+viewCollision : Mat4 -> Int -> TileCollision.Collision SquareCollider -> List WebGL.Entity
 viewCollision worldToViewport index collision =
     let
         color =

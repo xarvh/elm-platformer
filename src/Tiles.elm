@@ -1,4 +1,4 @@
-module Assets.Tiles exposing (..)
+module Tiles exposing (..)
 
 import Dict exposing (Dict)
 import Math.Vector3 as Vec3 exposing (Vec3, vec3)

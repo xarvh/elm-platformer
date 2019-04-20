@@ -1,4 +1,4 @@
-module Assets.Drone exposing (init)
+module Entities.Drone exposing (init)
 
 import Dict exposing (Dict)
 import EntityMain

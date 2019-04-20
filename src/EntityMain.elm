@@ -1,6 +1,6 @@
 module EntityMain exposing (..)
 
-import Assets.Tiles
+import Tiles exposing (SquareCollider)
 import Game exposing (..)
 import TileCollision exposing (Collision)
 import Vector exposing (Vector)
@@ -60,7 +60,7 @@ moveCollideAndSlide env maybeParent game entity =
                     collision.fix
 
         fixedAbsoluteVelocity =
-            Assets.Tiles.fixSpeed collisions entity.absoluteVelocity
+            Tiles.fixSpeed collisions entity.absoluteVelocity
     in
     { entity | tileCollisions = collisions }
         |> setPositionsFromAbsolute maybeParent fixedAbsolutePosition
@@ -68,7 +68,7 @@ moveCollideAndSlide env maybeParent game entity =
         |> entityOnly game
 
 
-moveCollide : (Collision Assets.Tiles.SquareCollider -> UpdateEntityFunction) -> UpdateEntityFunction
+moveCollide : (Collision SquareCollider -> UpdateEntityFunction) -> UpdateEntityFunction
 moveCollide onCollision env maybeParent game entity =
     let
         idealAbsolutePosition =

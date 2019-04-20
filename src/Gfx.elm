@@ -1,4 +1,4 @@
-module Assets.Gfx exposing (..)
+module Gfx exposing (..)
 
 -- import List.Extra
 
