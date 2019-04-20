@@ -11,7 +11,7 @@ module Svgl.Primitives
 
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import WebGL exposing (Entity, Mesh, Shader)
 import WebGL.Settings exposing (Setting)
 import WebGL.Settings.Blend as Blend
@@ -34,8 +34,8 @@ type alias Uniforms =
     , darknessFocus : Vec2
     , darknessIntensity : Float
     , dimensions : Vec2
-    , fill : Vec3
-    , stroke : Vec3
+    , fill : Vec4
+    , stroke : Vec4
     , strokeWidth : Float
     , opacity : Float
     }
@@ -49,8 +49,8 @@ defaultUniforms =
     , darknessFocus = vec2 0 0
     , darknessIntensity = 0
     , dimensions = vec2 1 1
-    , fill = vec3 0.4 0.4 0.4
-    , stroke = vec3 0.6 0.6 0.6
+    , fill = vec4 0.4 0.4 0.4 1
+    , stroke = vec4 0.6 0.6 0.6 1
     , strokeWidth = 0.1
     , opacity = 1
     }
@@ -132,8 +132,8 @@ quadVertexShader =
         uniform mat4 entityToWorld;
         uniform mat4 worldToCamera;
         uniform vec2 dimensions;
-        uniform vec3 fill;
-        uniform vec3 stroke;
+        uniform vec4 fill;
+        uniform vec4 stroke;
         uniform float strokeWidth;
 
         varying vec2 localPosition;
@@ -161,8 +161,8 @@ fragmentShader =
         uniform vec2 darknessFocus;
         uniform float darknessIntensity;
         uniform vec2 dimensions;
-        uniform vec3 fill;
-        uniform vec3 stroke;
+        uniform vec4 fill;
+        uniform vec4 stroke;
         uniform float strokeWidth;
         uniform float opacity;
 
@@ -249,13 +249,13 @@ fragmentShader =
             fillVsStroke = 1.0 - mirrorStep(fillSize.x, localPosition.x) * mirrorStep(fillSize.y, localPosition.y);
           }
 
-          vec3 color = mix(fill, stroke, fillVsStroke);
+          vec4 color = mix(fill, stroke, fillVsStroke);
 
 
           // darkness effect
           vec4 darknessColor = vec4(0.1, 0.1, 0.1, 1.0);
           float d = distance(worldPosition, darknessFocus) / 10.0;
           float i = 1.0 - 0.9 * darknessIntensity;
-          gl_FragColor = opacity * alpha * mix(vec4(color, 1.0), darknessColor, smoothstep(i, i + 0.1, d));
+          gl_FragColor = opacity * alpha * mix(color, darknessColor, smoothstep(i, i + 0.1, d));
         }
     |]

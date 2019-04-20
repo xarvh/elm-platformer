@@ -1,14 +1,11 @@
 module Scene exposing (..)
 
-import Circle
 import Dict exposing (Dict)
 import Game exposing (..)
 import GameMain
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
-import Obstacle
 import Player
 import Quad
 import Set exposing (Set)
@@ -146,36 +143,6 @@ entities { viewportSize, game } =
         |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree
     , svgs
     )
-
-
-dot : Mat4 -> Vector -> Float -> Vec3 -> WebGL.Entity
-dot worldToViewport { x, y } size color =
-    let
-        entityToViewport =
-            worldToViewport
-                |> Mat4.translate3 x y 0
-                |> Mat4.scale3 size size 1
-    in
-    Circle.entity entityToViewport color
-
-
-viewCollision : Mat4 -> Int -> TileCollision.Collision SquareCollider -> List WebGL.Entity
-viewCollision worldToViewport index collision =
-    let
-        color =
-            case index of
-                0 ->
-                    vec3 1 0 0
-
-                1 ->
-                    vec3 0 1 0
-
-                _ ->
-                    vec3 0 0 1
-    in
-    [ dot worldToViewport { x = toFloat collision.tile.column, y = toFloat collision.tile.row } 1.3 color
-    , dot worldToViewport collision.aabbPositionAtImpact 1 color
-    ]
 
 
 renderTile : Game -> RowColumn -> Svgl.Tree.TreeNode

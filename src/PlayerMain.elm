@@ -1,11 +1,11 @@
 module PlayerMain exposing (init, uZapPlayer)
 
 import Baloon
+import Color exposing (Color, hsl, hsla)
 import Dict exposing (Dict)
 import EntityMain
 import Game exposing (..)
 import List.Extra
-import Math.Vector3 exposing (Vec3, vec3)
 import Player exposing (ActionState)
 import Set exposing (Set)
 import Svgl.Tree exposing (defaultParams, ellipse, emptyNode, rect)
@@ -425,10 +425,10 @@ uPlayer fs env game =
 -- Render
 
 
-flashColor : Game -> Seconds -> Vec3 -> Vec3
+flashColor : Game -> Seconds -> Color -> Color
 flashColor game finishesAt color =
     if game.time < finishesAt && periodLinear game.time finishesAt 0.2 < 0.5 then
-        vec3 1 1 1
+        Color.white
     else
         color
 
@@ -456,8 +456,8 @@ render env game entity =
             { defaultParams
                 | w = width
                 , h = height
-                , fill = flash <| vec3 0 0.7 0
-                , stroke = flash <| vec3 0 1 0
+                , fill = flash <| Color.rgb 0 0.7 0
+                , stroke = flash <| Color.rgb 0 1 0
                 , x = entity.absolutePosition.x
                 , y = entity.absolutePosition.y
                 , rotate =
@@ -513,8 +513,8 @@ renderProjectile env game entity =
     else
         [ ellipse
             { defaultParams
-                | stroke = vec3 1 0.2 0
-                , fill = vec3 0.7 0.1 0
+                | stroke = Color.rgb 1 0.2 0
+                , fill = Color.rgb 0.7 0.1 0
                 , w = 0.5
                 , h = 0.5
             }

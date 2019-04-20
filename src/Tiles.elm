@@ -1,7 +1,7 @@
 module Tiles exposing (..)
 
+import Color exposing (Color, hsl, hsla)
 import Dict exposing (Dict)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Svgl.Tree exposing (TreeNode, defaultParams, ellipse, rect)
 import TileCollision exposing (Collision, RowColumn, TileCollider)
 import TransformTree exposing (Node(..))
@@ -145,8 +145,8 @@ transparentBlocker =
     , render =
         rect
             { defaultParams
-                | fill = vec3 1 1 1
-                , stroke = vec3 1 0 0
+                | fill = Color.white
+                , stroke = Color.red
                 , opacity = 0.5
             }
     }
@@ -163,13 +163,13 @@ rivetedBlocker =
         let
             re =
                 { defaultParams
-                    | fill = vec3 0.5 0.5 0.5
-                    , stroke = vec3 0.8 0.8 0.8
+                    | fill = Color.grey
+                    , stroke = Color.lightGrey
                 }
 
             ell =
                 { defaultParams
-                    | fill = vec3 0.8 0.8 0.8
+                    | fill = Color.lightGrey
 
                     --, stroke =
                     , strokeWidth = 0
@@ -207,8 +207,8 @@ oneWayPlatform =
             []
             [ rect
                 { defaultParams
-                    | fill = vec3 0.8 0.8 0.8
-                    , stroke = vec3 0.5 0.5 0.5
+                    | fill = Color.lightGrey
+                    , stroke = Color.grey
                     , y = 0.5 - platformThickness / 2
                     , h = platformThickness
                 }
@@ -228,31 +228,31 @@ crossedStruts =
             []
             [ rect
                 { defaultParams
-                    | fill = vec3 0.5 0.5 0.5
-                    , stroke = vec3 0 0 0
+                    | fill = Color.grey
+                    , stroke = Color.black
                     , h = 0.2
                     , w = 1.3
                     , rotate = degrees 45
                 }
             , rect
                 { defaultParams
-                    | fill = vec3 0.5 0.5 0.5
-                    , stroke = vec3 0 0 0
+                    | fill = Color.grey
+                    , stroke = Color.black
                     , h = 0.2
                     , w = 1.3
                     , rotate = degrees -45
                 }
             , rect
                 { defaultParams
-                    | fill = vec3 0.5 0.5 0.5
-                    , stroke = vec3 0 0 0
+                    | fill = Color.grey
+                    , stroke = Color.black
                     , y = 0.4
                     , h = 0.2
                 }
             , rect
                 { defaultParams
-                    | fill = vec3 0.5 0.5 0.5
-                    , stroke = vec3 0 0 0
+                    | fill = Color.grey
+                    , stroke = Color.black
                     , y = -0.4
                     , h = 0.2
                 }
@@ -272,8 +272,8 @@ ground =
             []
             [ rect
                 { defaultParams
-                    | fill = vec3 0.5 0.3 0.2
-                    , stroke = vec3 0.2 0.1 0.1
+                    | fill = Color.rgb 0.5 0.3 0.2
+                    , stroke = Color.rgb 0.2 0.1 0.1
                 }
             ]
     }
@@ -290,8 +290,8 @@ ladder =
         let
             params =
                 { defaultParams
-                    | fill = vec3 0 0.16 1
-                    , stroke = vec3 0.13 0.2 0.5
+                    | fill = Color.rgb 0 0.16 1
+                    , stroke = Color.rgb 0.13 0.2 0.5
                     , strokeWidth = 0.01
                 }
         in

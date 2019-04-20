@@ -1,9 +1,9 @@
 module Entities.Drone exposing (init)
 
+import Color exposing (Color, hsl, hsla)
 import Dict exposing (Dict)
 import EntityMain
 import Game exposing (..)
-import Math.Vector3 as Vec3 exposing (vec3)
 import PlayerMain
 import Svgl.Tree exposing (defaultParams, ellipse, rect)
 import TransformTree exposing (..)
@@ -174,13 +174,13 @@ render env game entity =
     else
         [ ellipse
             { defaultParams
-                | stroke = vec3 1 0.2 0
-                , fill = vec3 0.7 0.1 0
+                | stroke = Color.rgb 1 0.2 0
+                , fill = Color.rgb 0.7 0.1 0
             }
         , rect
             { defaultParams
-                | stroke = vec3 1 0.2 0
-                , fill = vec3 0.1 0.1 0.1
+                | stroke = Color.rgb 1 0.2 0
+                , fill = Color.rgb 0.1 0.1 0.1
                 , w = 0.6
                 , h = 0.3
                 , y = 0.2
@@ -217,8 +217,8 @@ renderSatellites game entity index =
         ]
         [ ellipse
             { defaultParams
-                | fill = vec3 1 0.5 0.5
-                , stroke = vec3 1 0 0
+                | fill = Color.rgb 1 0.5 0.5
+                , stroke = Color.rgb 1 0 0
                 , w = 0.3
                 , h = 0.15
             }
@@ -232,8 +232,8 @@ renderLed game entity index =
     in
     ellipse
         { defaultParams
-            | fill = vec3 1 0.5 0.5
-            , stroke = vec3 1 0 0
+            | fill = Color.rgb 1 0.5 0.5
+            , stroke = Color.rgb 1 0 0
             , w = 0.18
             , h = 0.22
             , x = 0.2 * n
@@ -254,8 +254,8 @@ renderLeg game entity index =
     in
     rect
         { defaultParams
-            | fill = vec3 0.7 0.1 0
-            , stroke = vec3 1 0.2 0
+            | fill = Color.rgb 0.7 0.1 0
+            , stroke = Color.rgb 1 0.2 0
             , w = 0.15
             , h = 0.4
             , x = 0.4 * x
