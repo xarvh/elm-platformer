@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Missions.First
+import Missions.Intro
 import Browser
 import Browser.Events
 import Game exposing (Game)
@@ -59,7 +59,7 @@ init flags =
 
         -- TODO do not ignore outcomes?
         ( game, outcomes ) =
-            GameMain.init Missions.First.init
+            GameMain.init Missions.Intro.init
 
         model =
             { viewportSize =
