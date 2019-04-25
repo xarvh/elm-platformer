@@ -1,15 +1,15 @@
 module Missions.Intro exposing (init)
 
-import Baloon
 import Dict exposing (Dict)
 import Entities.Drone
+import EntityMain
 import Game exposing (..)
 import Maps.Intro
 import PlayerMain
+import SpeechBubble
 import Svg exposing (Svg)
 import Svg.Attributes as SA
 import Svgl.Tree exposing (defaultParams, ellipse, rect)
--- import Tiles exposing (SquareCollider)
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 
@@ -42,19 +42,48 @@ init =
     , uNewEntity Nothing
         [ PlayerMain.init map.pois.startingPosition
         ]
-    , addFadeIn
-    , uLater 2 <|
-        \env game ->
-            uNewEntity (Just game.playerId)
-                [ Baloon.init "This is a terrible idea"
-                ]
-                env
-                game
+    , addFadeIn 3
+    , uSeries
+        [ zaneSays 1 "Oden! Can you hear me?"
+        , odenSays 1 "This is a terrible idea..."
+        , zaneSays 1 "ODEN! CAN. YOU. HEAR. ME?"
+        , odenSays 1 "..."
+        , odenSays 2 "Yes Zane, I can hear you loud and clear."
+        ]
     ]
 
 
-addFadeIn : UpdateFunction
-addFadeIn =
+
+uSeries : List (UpdateFunction -> UpdateFunction) -> UpdateFunction
+uSeries chainableFunctions env game =
+  case chainableFunctions of
+    [] ->
+      noOut game
+
+    f :: fs ->
+      f (uSeries fs) env game
+
+
+
+
+
+zaneSays : Seconds -> String -> UpdateFunction -> UpdateFunction
+zaneSays time content onDone  =
+    uLater time <| SpeechBubble.uNew Nothing content onDone
+
+
+odenSays : Seconds -> String -> UpdateFunction
+odenSays time content =
+    uLater time <|
+        \env game ->
+            uNewEntity (Just game.playerId)
+                [ SpeechBubble.withTail content ]
+                env
+                game
+
+
+addFadeIn : Seconds -> UpdateFunction
+addFadeIn delay =
     let
         duration =
             6
@@ -62,20 +91,20 @@ addFadeIn =
     uNewEntity Nothing
         [ \env maybeParent game entity ->
             entity
-                |> appendThinkFunctions [{- tTimeToLive duration -}]
-                |> appendRenderFunctions [ fadeInRender duration ]
+                |> appendThinkFunctions [ EntityMain.killAfter (delay + duration) ]
+                |> appendRenderFunctions [ fadeInRender delay duration ]
                 |> entityOnly game
         ]
 
 
-fadeInRender : Float -> RenderFunction
-fadeInRender duration env game entity =
+fadeInRender : Float -> Float -> RenderFunction
+fadeInRender delay duration env game entity =
     let
         age =
-            game.time - entity.spawnedAt
+            game.time - entity.spawnedAt - delay
 
         opacity =
-            1 - age / duration
+            1 - age / duration |> min 1
     in
     Svg.rect
         [ SA.x "-1"
@@ -86,4 +115,4 @@ fadeInRender duration env game entity =
         , SA.opacity <| String.fromFloat opacity
         ]
         []
-        |> RenderableSvg
+        |> RenderableSvg 1

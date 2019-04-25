@@ -217,7 +217,7 @@ type RenderScript
 type Renderable
     = RenderableNone
     | RenderableTree Svgl.Tree.TreeNode
-    | RenderableSvg (Svg Never)
+    | RenderableSvg Int (Svg Never)
     | RenderableWebGL (List WebGL.Entity)
 
 

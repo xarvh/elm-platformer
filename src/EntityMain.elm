@@ -1,9 +1,17 @@
 module EntityMain exposing (..)
 
-import Tiles exposing (SquareCollider)
 import Game exposing (..)
 import TileCollision exposing (Collision)
+import Tiles exposing (SquareCollider)
 import Vector exposing (Vector)
+
+
+killAfter : Seconds -> UpdateEntityFunction
+killAfter duration env maybeParent game entity =
+    if game.time - entity.spawnedAt < duration then
+        entityOnly game entity
+    else
+        uToE (uDeleteEntity entity.id) env maybeParent game entity
 
 
 applyGravity : UpdateEntityFunction

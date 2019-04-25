@@ -1,6 +1,6 @@
 module PlayerMain exposing (init, uZapPlayer)
 
-import Baloon
+-- import Baloon
 import Color exposing (Color, hsl, hsla)
 import Dict exposing (Dict)
 import EntityMain
@@ -23,8 +23,8 @@ cCanFireAt =
     component.seconds "canFireAt" 0
 
 
-cBaloonColor =
-    Baloon.colorComponent
+-- cBaloonColor =
+--     Baloon.colorComponent
 
 
 cState =
@@ -130,7 +130,7 @@ init position env maybeParent game entity =
         |> appendRenderFunctions
             [ render
             ]
-        |> cBaloonColor.set {- TODO -} 2
+--         |> cBaloonColor.set {- TODO -} 2
     , { game | playerId = entity.id }
     , OutcomeNone
     )

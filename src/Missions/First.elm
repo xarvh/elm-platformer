@@ -93,4 +93,4 @@ fadeInRender duration env game entity =
         , SA.opacity <| String.fromFloat opacity
         ]
         []
-        |> RenderableSvg
+        |> RenderableSvg 1
