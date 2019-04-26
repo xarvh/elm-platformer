@@ -5,6 +5,7 @@
 
         <link rel="stylesheet" media="screen" href="static/style.css" type="text/css"/>
         <script type="text/javascript" src="build/app.js"></script>
+        <script type="text/javascript" src="static/textWidthPort.js"></script>
         <!--
         <script type="text/javascript" src="static/gamepadPort.js"></script>
         <script type="text/javascript" src="static/localStoragePort.js"></script>
@@ -22,6 +23,8 @@
                 dateNow: Date.now(),
               }
             });
+
+            addTextWidthPorts(elmApp);
             /*
             addGamepadPort(elmApp);
             addLocalStoragePort(elmApp);

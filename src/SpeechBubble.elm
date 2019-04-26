@@ -1,5 +1,6 @@
 module SpeechBubble exposing (..)
 
+import Dict
 import Game exposing (..)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Svg exposing (Svg)
@@ -7,17 +8,22 @@ import Svg.Attributes as SA
 import Viewport.Combine
 
 
-averageSymbolWidth =
-    0.45
-
-
 component =
     componentNamespace "bubble"
+
+
+cTextWidth =
+    component.float "textWidth" 0
 
 
 colorComponent =
     -- TODO have a color type
     component.int "color" 0
+
+
+defaultDuration : String -> Float
+defaultDuration content =
+    3.0 + 0.1 * toFloat (String.length content)
 
 
 uNew : Maybe Id -> String -> UpdateFunction -> UpdateFunction
@@ -36,6 +42,9 @@ uNew maybeParentId content onDone =
                     |> appendRenderFunctions
                         [ render content
                         ]
+                    |> appendThinkFunctions
+                        [ queryTextWidth
+                        ]
                 , uLater (defaultDuration content)
                     (uList
                         [ uDeleteEntity entity.id
@@ -49,16 +58,35 @@ uNew maybeParentId content onDone =
     uNewEntity maybeParentId [ init ]
 
 
-defaultDuration : String -> Float
-defaultDuration content =
-    3.0 + 0.1 * toFloat (String.length content)
+
+-- Query text width from the DOM
+
+
+queryTextWidth : UpdateEntityFunction
+queryTextWidth env maybeParent game entity =
+    if cTextWidth.get entity == 0 then
+        ( entity, game, OutcomeQueryWidth entity.id )
+    else
+        ( entity, game, OutcomeNone )
+
+
+applyWidth : Id -> Float -> Game -> Game
+applyWidth id width game =
+    { game | entitiesById = Dict.update id (Maybe.map <| cTextWidth.set width) game.entitiesById }
+
+
+
+-- Render
 
 
 renderWithTail : String -> RenderFunction
 renderWithTail content env game entity =
     let
+        textWidthAsRatio =
+            cTextWidth.get entity
+
         textW =
-            toFloat (String.length content) * averageSymbolWidth
+            textWidthAsRatio * env.visibleWorldSize.width
 
         margin =
             0.5
@@ -85,6 +113,10 @@ renderWithTail content env game entity =
             |> Mat4.translate3 entity.absolutePosition.x entity.absolutePosition.y 0
             |> Mat4.translate3 0.3 1.5 0
             |> Viewport.Combine.transform
+        , if textW == 0 then
+            SA.opacity "0"
+          else
+            SA.class ""
         ]
         [ Svg.path
             [ SA.d (String.join " " p)
@@ -100,6 +132,7 @@ renderWithTail content env game entity =
             , SA.style "font-size: 1"
             , SA.textLength <| String.fromFloat textW
             , SA.class "speech-baloon"
+            , SA.id (String.fromInt entity.id)
             ]
             [ Svg.text content ]
         ]
@@ -109,8 +142,11 @@ renderWithTail content env game entity =
 renderOffscreen : String -> RenderFunction
 renderOffscreen content env game entity =
     let
+        textWidthAsRatio =
+            cTextWidth.get entity
+
         textW =
-            toFloat (String.length content) * averageSymbolWidth
+            textWidthAsRatio * env.visibleWorldSize.width
 
         margin =
             0.5
@@ -139,6 +175,10 @@ renderOffscreen content env game entity =
         [ env.worldToCamera
             |> Mat4.translate3 game.cameraPosition.x (game.cameraPosition.y + yOffset) 0
             |> Viewport.Combine.transform
+        , if textW == 0 then
+            SA.opacity "0"
+          else
+            SA.class ""
         ]
         [ Svg.path
             [ SA.d (String.join " " p)
@@ -154,6 +194,7 @@ renderOffscreen content env game entity =
             , SA.style "font-size: 1"
             , SA.textLength <| String.fromFloat textW
             , SA.class "speech-baloon"
+            , SA.id (String.fromInt entity.id)
             ]
             [ Svg.text content ]
         ]

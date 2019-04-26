@@ -254,6 +254,7 @@ type Outcome
     | OutcomeList (List Outcome)
     | OutcomeLog String
     | OutcomeCrash String
+    | OutcomeQueryWidth Id
 
 
 type WrappedUpdateEntityFunction
