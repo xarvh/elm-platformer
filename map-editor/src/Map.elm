@@ -47,7 +47,7 @@ type alias Map pois =
     }
 
 
-type alias UndoSlice =
+type alias UndoSnapshot =
     { tiles : Dict Pair Char
     , pois : Dict String Vector
     }
@@ -65,8 +65,8 @@ type alias Model =
     , cameraPosition : Vector
     , selectedTileBrushId : Char
     , mode : Mode
-    , undoHistory : List UndoSlice
-    , redoHistory : List UndoSlice
+    , undoHistory : List UndoSnapshot
+    , redoHistory : List UndoSnapshot
     , hoveredPoi : String
     , selectedPoi : String
     , renamingPoi : Maybe ( String, String )
@@ -323,11 +323,11 @@ update msg model =
             { model | mouseButtonIsDown = isDown }
                 |> (case model.mode of
                         ModeTiles ->
-                            ifThenElse isDown (pushUndo model >> replaceTile) identity
+                            ifThenElse isDown (pushUndoSnapshotFrom model >> replaceTile) identity
 
                         ModePois ->
                             if isDown && model.selectedPoi /= "" then
-                                pushUndo model >> poiToMouse model.selectedPoi
+                                pushUndoSnapshotFrom model >> poiToMouse model.selectedPoi
                             else
                                 identity
                    )
@@ -489,7 +489,7 @@ setRenamedPoi model =
                     , renamingPoi = Nothing
                     , selectedPoi = newName
                 }
-                    |> pushUndo model
+                    |> pushUndoSnapshotFrom model
 
 
 poiToMouse : String -> Model -> Model
@@ -518,38 +518,38 @@ addPoi model =
         | pois = Dict.insert name model.cameraPosition model.pois
         , selectedPoi = name
     }
-        |> pushUndo model
+        |> pushUndoSnapshotFrom model
 
 
 deletePoi : Model -> Model
 deletePoi model =
     { model | pois = Dict.remove model.selectedPoi model.pois }
-        |> pushUndo model
+        |> pushUndoSnapshotFrom model
 
 
 
 -- Undo ----------------------------------------------------------------------
 
 
-getUndoSlice : Model -> UndoSlice
-getUndoSlice { pois, tiles } =
+getUndoSnapshot : Model -> UndoSnapshot
+getUndoSnapshot { pois, tiles } =
     { pois = pois
     , tiles = tiles
     }
 
 
-setUndoSlice : UndoSlice -> Model -> Model
-setUndoSlice { pois, tiles } model =
+setUndoSnapshot : UndoSnapshot -> Model -> Model
+setUndoSnapshot { pois, tiles } model =
     { model
         | pois = pois
         , tiles = tiles
     }
 
 
-pushUndo : Model -> Model -> Model
-pushUndo oldModel newModel =
+pushUndoSnapshotFrom : Model -> Model -> Model
+pushUndoSnapshotFrom oldModel newModel =
     { newModel
-        | undoHistory = getUndoSlice oldModel :: newModel.undoHistory
+        | undoHistory = getUndoSnapshot oldModel :: newModel.undoHistory
         , redoHistory = []
     }
 
@@ -563,9 +563,9 @@ undo model =
         h :: hs ->
             { model
                 | undoHistory = hs
-                , redoHistory = getUndoSlice model :: model.redoHistory
+                , redoHistory = getUndoSnapshot model :: model.redoHistory
             }
-                |> setUndoSlice h
+                |> setUndoSnapshot h
 
 
 redo : Model -> Model
@@ -576,10 +576,10 @@ redo model =
 
         r :: rs ->
             { model
-                | undoHistory = getUndoSlice model :: model.undoHistory
+                | undoHistory = getUndoSnapshot model :: model.undoHistory
                 , redoHistory = rs
             }
-                |> setUndoSlice r
+                |> setUndoSnapshot r
 
 
 
@@ -669,7 +669,7 @@ transfer updateBounds destinationToSourcePair model =
     in
     -- TODO: also modify pois
     { model | tiles = tiles }
-        |> pushUndo model
+        |> pushUndoSnapshotFrom model
 
 
 duplicateColumn : Int -> Model -> Model
