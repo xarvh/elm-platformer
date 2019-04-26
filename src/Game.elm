@@ -350,10 +350,16 @@ uNewEntity maybeParentId fs env oldGame =
         e =
             newEntity__ maybeParentId oldGame
 
+        maybeParent =
+            getParent oldGame e
+
         ( entity, newGame, outcomes ) =
             List.foldl
-                (entityUpdate_runOneFunction env <| getParent oldGame e)
-                ( e, { oldGame | lastId = e.id }, [] )
+                (entityUpdate_runOneFunction env maybeParent)
+                ( setPositionsFromRelative maybeParent Vector.origin e
+                , { oldGame | lastId = e.id }
+                , []
+                )
                 fs
 
         updateParent =

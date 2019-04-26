@@ -8,7 +8,7 @@ import Viewport.Combine
 
 
 averageSymbolWidth =
-    0.43
+    0.45
 
 
 component =
@@ -20,62 +20,38 @@ colorComponent =
     component.int "color" 0
 
 
-
-{-
-   type alias BaloonArgs =
-       { maybeOrigin :
-          { origin : Vector
-          , minimumDistance : Float
-          }
-       , content : List String
-
-       {-
-          , showPressToContinue: Bool
-          , scream: Bool
-          , radio: Bool
-          , think: Bool
-          , font: FontFace
-       -}
-       }
-
--}
-
-
 uNew : Maybe Id -> String -> UpdateFunction -> UpdateFunction
 uNew maybeParentId content onDone =
-            uNewEntity 
-                [ SpeechBubble.withTail content ]
-                env
-                game
+    let
+        render =
+            if maybeParentId == Nothing then
+                renderOffscreen
+            else
+                renderWithTail
 
+        init : UpdateEntityFunction
+        init env _ game entity =
+            toTriple
+                ( entity
+                    |> appendRenderFunctions
+                        [ render content
+                        ]
+                , uLater (defaultDuration content)
+                    (uList
+                        [ uDeleteEntity entity.id
+                        , onDone
+                        ]
+                    )
+                    env
+                    game
+                )
+    in
+    uNewEntity maybeParentId [ init ]
 
 
 defaultDuration : String -> Float
 defaultDuration content =
     3.0 + 0.1 * toFloat (String.length content)
-
-
-offscreen : String -> UpdateEntityFunction
-offscreen content env maybeParent game entity =
-    toTriple
-        ( entity
-            |> appendRenderFunctions
-                [ renderOffscreen content
-                ]
-        , uLater (defaultDuration content) (uDeleteEntity entity.id) env game
-        )
-
-
-withTail : String -> UpdateEntityFunction
-withTail content env maybeParent game entity =
-    toTriple
-        ( entity
-            |> setPositionsFromRelative maybeParent { x = 0.3, y = 1.5 }
-            |> appendRenderFunctions
-                [ renderWithTail content
-                ]
-        , uLater (defaultDuration content) (uDeleteEntity entity.id) env game
-        )
 
 
 renderWithTail : String -> RenderFunction
@@ -107,6 +83,7 @@ renderWithTail content env game entity =
     Svg.g
         [ env.worldToCamera
             |> Mat4.translate3 entity.absolutePosition.x entity.absolutePosition.y 0
+            |> Mat4.translate3 0.3 1.5 0
             |> Viewport.Combine.transform
         ]
         [ Svg.path

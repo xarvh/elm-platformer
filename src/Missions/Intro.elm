@@ -72,14 +72,12 @@ zaneSays time content onDone  =
     uLater time <| SpeechBubble.uNew Nothing content onDone
 
 
-odenSays : Seconds -> String -> UpdateFunction
-odenSays time content =
+odenSays : Seconds -> String -> UpdateFunction -> UpdateFunction
+odenSays time content onDone =
     uLater time <|
         \env game ->
-            uNewEntity (Just game.playerId)
-                [ SpeechBubble.withTail content ]
-                env
-                game
+            SpeechBubble.uNew (Just game.playerId) content onDone env game
+
 
 
 addFadeIn : Seconds -> UpdateFunction
