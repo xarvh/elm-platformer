@@ -155,7 +155,7 @@ type alias Entity =
 
     --
     , renderScripts : List RenderScript
-    , wrappedUpdateFunctions : List WrappedUpdateEntityFunction
+    , wrappedUpdateFunctions : List WrappedEntityUpdateFunction
     , components : Dict String Components.Component
 
     --
@@ -217,7 +217,7 @@ type RenderScript
 type Renderable
     = RenderableNone
     | RenderableTree Svgl.Tree.TreeNode
-    | RenderableSvg (Svg Never)
+    | RenderableSvg Int (Svg Never)
     | RenderableWebGL (List WebGL.Entity)
 
 
@@ -254,15 +254,16 @@ type Outcome
     | OutcomeList (List Outcome)
     | OutcomeLog String
     | OutcomeCrash String
+    | OutcomeQueryWidth Id
 
 
-type WrappedUpdateEntityFunction
-    = WrapEntityFunction UpdateEntityFunction
+type WrappedEntityUpdateFunction
+    = WrapEntityFunction EntityUpdateFunction
 
 
 {-| By convention, they start with `e`
 -}
-type alias UpdateEntityFunction =
+type alias EntityUpdateFunction =
     UpdateEnv -> Maybe Parent -> Game -> Entity -> ( Entity, Game, Outcome )
 
 
@@ -294,7 +295,7 @@ noOut a =
     ( a, OutcomeNone )
 
 
-{-| This helps when calling an UpdateFunction functions from within an UpdateEntityFunction
+{-| This helps when calling an UpdateFunction functions from within an EntityUpdateFunction
 -}
 toTriple : ( Entity, ( Game, Outcome ) ) -> ( Entity, Game, Outcome )
 toTriple ( e, ( g, o ) ) =
@@ -324,7 +325,7 @@ uRandom generator env game =
     f env { game | seed = seed }
 
 
-uEntity : Id -> List UpdateEntityFunction -> UpdateFunction
+uEntity : Id -> List EntityUpdateFunction -> UpdateFunction
 uEntity id fs env game =
     if fs == [] then
         noOut game
@@ -344,16 +345,22 @@ uEntity id fs env game =
                 ( { ww | entitiesById = Dict.insert id ee ww.entitiesById }, OutcomeList oo )
 
 
-uNewEntity : Maybe Id -> List UpdateEntityFunction -> UpdateFunction
+uNewEntity : Maybe Id -> List EntityUpdateFunction -> UpdateFunction
 uNewEntity maybeParentId fs env oldGame =
     let
         e =
             newEntity__ maybeParentId oldGame
 
+        maybeParent =
+            getParent oldGame e
+
         ( entity, newGame, outcomes ) =
             List.foldl
-                (entityUpdate_runOneFunction env <| getParent oldGame e)
-                ( e, { oldGame | lastId = e.id }, [] )
+                (entityUpdate_runOneFunction env maybeParent)
+                ( setPositionsFromRelative maybeParent Vector.origin e
+                , { oldGame | lastId = e.id }
+                , []
+                )
                 fs
 
         updateParent =
@@ -387,7 +394,7 @@ uNewEntity maybeParentId fs env oldGame =
     )
 
 
-entityUpdate_runOneFunction : UpdateEnv -> Maybe Parent -> UpdateEntityFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
+entityUpdate_runOneFunction : UpdateEnv -> Maybe Parent -> EntityUpdateFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
 entityUpdate_runOneFunction env maybeParent f ( entity, game, os ) =
     let
         ( e, w, o ) =
@@ -427,8 +434,8 @@ uDeleteEntity id env game =
 
 {-| TODO rename to appendUpdateFunction
 -}
-appendThinkFunctions : List UpdateEntityFunction -> Entity -> Entity
-appendThinkFunctions fs entity =
+appendEntityUpdateFunctions : List EntityUpdateFunction -> Entity -> Entity
+appendEntityUpdateFunctions fs entity =
     { entity | wrappedUpdateFunctions = entity.wrappedUpdateFunctions ++ List.map WrapEntityFunction fs }
 
 
@@ -450,7 +457,7 @@ entityOnly game entity =
     ( entity, game, OutcomeNone )
 
 
-eList : List UpdateEntityFunction -> UpdateEntityFunction
+eList : List EntityUpdateFunction -> EntityUpdateFunction
 eList fs env maybeParent game entity =
     let
         fold f ( e, g, os ) =
@@ -461,7 +468,7 @@ eList fs env maybeParent game entity =
         |> mapThird OutcomeList
 
 
-uToE : UpdateFunction -> UpdateEntityFunction
+uToE : UpdateFunction -> EntityUpdateFunction
 uToE f env maybeParent game entity =
     toTriple
         ( entity

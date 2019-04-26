@@ -1,6 +1,5 @@
-module Main exposing (..)
+port module Main exposing (..)
 
-import Missions.Intro
 import Browser
 import Browser.Events
 import Game exposing (Game)
@@ -10,7 +9,10 @@ import Html.Attributes exposing (class, style)
 import Json.Decode exposing (Decoder)
 import Keyboard
 import Keyboard.Arrows
+import Missions.Intro
+import Ports.TextWidth
 import Scene
+import SpeechBubble
 import Svg exposing (Svg)
 import Svg.Attributes as SA
 import TileCollision
@@ -44,6 +46,7 @@ type Msg
     | OnAnimationFrame Float
     | OnKey Keyboard.Msg
     | OnMouseMove Viewport.PixelPosition
+    | OnQueryWidthResponse ( Int, Float )
 
 
 
@@ -111,6 +114,10 @@ update msg model =
 
         OnMouseMove position ->
             { model | mousePosition = position }
+                |> noCmd
+
+        OnQueryWidthResponse ( entityId, width ) ->
+            { model | game = SpeechBubble.applyWidth entityId width model.game }
                 |> noCmd
 
         OnAnimationFrame dtInMilliseconds ->
@@ -189,6 +196,9 @@ executeOutcome o =
         Game.OutcomeCrash msg ->
             Debug.todo msg
 
+        Game.OutcomeQueryWidth id ->
+            [ Ports.TextWidth.textWidthRequest id ]
+
 
 
 -- View
@@ -207,7 +217,7 @@ view model =
     , body =
         [ Viewport.Combine.wrapper
             { viewportSize = model.viewportSize
-            , elementAttributes = []
+            , elementAttributes = [ Html.Attributes.id "viewport" ]
             , webglOptions =
                 [ WebGL.alpha True
                 , WebGL.antialias
@@ -241,6 +251,7 @@ subscriptions model =
             Browser.Events.onAnimationFrameDelta OnAnimationFrame
         , Keyboard.subscriptions |> Sub.map OnKey
         , Browser.Events.onMouseMove mousePositionDecoder |> Sub.map OnMouseMove
+        , Ports.TextWidth.textWidthResponse OnQueryWidthResponse
         ]
 
 

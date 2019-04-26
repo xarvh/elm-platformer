@@ -88,7 +88,7 @@ entityUpdate env maybeParent id ( game, os ) =
                 e.childrenIds
 
 
-entityExecuteOneUpdateFunction : UpdateEnv -> Maybe Parent -> WrappedUpdateEntityFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
+entityExecuteOneUpdateFunction : UpdateEnv -> Maybe Parent -> WrappedEntityUpdateFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
 entityExecuteOneUpdateFunction env maybeParent (WrapEntityFunction f) ( entity, game, os ) =
     let
         ( e, w, o ) =
@@ -131,13 +131,14 @@ executeOneLater env ( timestamp, WrapFunction f ) ( game, os ) =
 
 --
 -- Render
+--
 
 
 type alias RenderOutput =
-    ( List WebGL.Entity, List (Svg Never) )
+    ( List WebGL.Entity, List (Int, Svg Never) )
 
 
-renderEntities : Uniforms -> RenderEnv -> Game -> RenderOutput
+renderEntities : Uniforms -> RenderEnv -> Game -> (List WebGL.Entity, List (Svg Never))
 renderEntities baseUniforms env game =
     let
         leafToWebGl =
@@ -152,8 +153,8 @@ renderEntities baseUniforms env game =
                 RenderableTree tree ->
                     Tuple.mapFirst (TransformTree.resolveAndAppend leafToWebGl Mat4.identity tree) output
 
-                RenderableSvg svg ->
-                    Tuple.mapSecond ((::) svg) output
+                RenderableSvg zIndex svg ->
+                    Tuple.mapSecond ((::) (zIndex, svg)) output
 
                 RenderableWebGL entities ->
                     Tuple.mapFirst ((++) entities) output
@@ -164,3 +165,4 @@ renderEntities baseUniforms env game =
     in
     game.entitiesById
         |> Dict.foldl executeAllRenderFunctions ( [], [] )
+        |> Tuple.mapSecond (List.sortBy Tuple.first >> List.map Tuple.second)

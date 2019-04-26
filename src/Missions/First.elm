@@ -69,7 +69,7 @@ addFadeIn =
     uNewEntity Nothing
         [ \env maybeParent game entity ->
             entity
-                |> appendThinkFunctions [{- tTimeToLive duration -}]
+                |> appendEntityUpdateFunctions [{- tTimeToLive duration -}]
                 |> appendRenderFunctions [ fadeInRender duration ]
                 |> entityOnly game
         ]
@@ -93,4 +93,4 @@ fadeInRender duration env game entity =
         , SA.opacity <| String.fromFloat opacity
         ]
         []
-        |> RenderableSvg
+        |> RenderableSvg 1
