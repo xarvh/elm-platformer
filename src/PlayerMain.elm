@@ -112,13 +112,13 @@ jumpBoostTime =
 -- Init
 
 
-init : Vector -> UpdateEntityFunction
+init : Vector -> EntityUpdateFunction
 init position env maybeParent game entity =
     ( { entity
         | size = size
       }
         |> setPositionsFromRelative maybeParent position
-        |> appendThinkFunctions
+        |> appendEntityUpdateFunctions
             [ EntityMain.moveCollideAndSlide
             , EntityMain.applyGravity
             , inputMovement
@@ -148,7 +148,7 @@ debug env maybeParent game entity =
 -- Think
 
 
-moveCamera : UpdateEntityFunction
+moveCamera : EntityUpdateFunction
 moveCamera env maybeParent game entity =
     if game.cameraMode /= CameraFollowsPlayer then
         ( entity
@@ -162,7 +162,7 @@ moveCamera env maybeParent game entity =
         )
 
 
-inputUseGear : UpdateEntityFunction
+inputUseGear : EntityUpdateFunction
 inputUseGear env maybeParent game entity =
     if env.inputUseGearClick && game.time >= cCanFireAt.get entity then
         toTriple
@@ -179,7 +179,7 @@ inputUseGear env maybeParent game entity =
         entityOnly game entity
 
 
-inputMovement : UpdateEntityFunction
+inputMovement : EntityUpdateFunction
 inputMovement env maybeParent game entity =
     let
         onFloor =
@@ -416,7 +416,7 @@ uZapPlayer zapOrigin =
         ]
 
 
-uPlayer : List UpdateEntityFunction -> UpdateFunction
+uPlayer : List EntityUpdateFunction -> UpdateFunction
 uPlayer fs env game =
     uEntity game.playerId fs env game
 
@@ -477,7 +477,7 @@ render env game entity =
 -- Projectile
 
 
-eDecayProjectile : Vector -> Bool -> UpdateEntityFunction
+eDecayProjectile : Vector -> Bool -> EntityUpdateFunction
 eDecayProjectile position flipX env maybeParent game entity =
     let
         xSign =
@@ -491,7 +491,7 @@ eDecayProjectile position flipX env maybeParent game entity =
     }
         |> setPositionsFromAbsolute maybeParent position
         |> setVelocitiesFromAbsolute maybeParent (Vector (5 * xSign) 0)
-        |> appendThinkFunctions
+        |> appendEntityUpdateFunctions
             [ EntityMain.moveCollide removeOnTileCollision
             ]
         |> appendRenderFunctions
@@ -500,7 +500,7 @@ eDecayProjectile position flipX env maybeParent game entity =
         |> entityOnly game
 
 
-removeOnTileCollision : Collision SquareCollider -> UpdateEntityFunction
+removeOnTileCollision : Collision SquareCollider -> EntityUpdateFunction
 removeOnTileCollision collision env maybeParent game entity =
     -- TODO remove self (this should probably be a helper in the Game module)
     ( entity, game, OutcomeNone )

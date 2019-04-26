@@ -35,14 +35,14 @@ uNew maybeParentId content onDone =
             else
                 renderWithTail
 
-        init : UpdateEntityFunction
+        init : EntityUpdateFunction
         init env _ game entity =
             toTriple
                 ( entity
                     |> appendRenderFunctions
                         [ render content
                         ]
-                    |> appendThinkFunctions
+                    |> appendEntityUpdateFunctions
                         [ queryTextWidth
                         ]
                 , uLater (defaultDuration content)
@@ -62,7 +62,7 @@ uNew maybeParentId content onDone =
 -- Query text width from the DOM
 
 
-queryTextWidth : UpdateEntityFunction
+queryTextWidth : EntityUpdateFunction
 queryTextWidth env maybeParent game entity =
     if cTextWidth.get entity == 0 then
         ( entity, game, OutcomeQueryWidth entity.id )

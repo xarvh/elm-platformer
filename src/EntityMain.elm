@@ -6,7 +6,7 @@ import Tiles exposing (SquareCollider)
 import Vector exposing (Vector)
 
 
-killAfter : Seconds -> UpdateEntityFunction
+killAfter : Seconds -> EntityUpdateFunction
 killAfter duration env maybeParent game entity =
     if game.time - entity.spawnedAt < duration then
         entityOnly game entity
@@ -14,7 +14,7 @@ killAfter duration env maybeParent game entity =
         uToE (uDeleteEntity entity.id) env maybeParent game entity
 
 
-applyGravity : UpdateEntityFunction
+applyGravity : EntityUpdateFunction
 applyGravity env maybeParent game entity =
     let
         absoluteVelocity =
@@ -29,7 +29,7 @@ applyGravity env maybeParent game entity =
         |> entityOnly game
 
 
-applyFriction : Float -> UpdateEntityFunction
+applyFriction : Float -> EntityUpdateFunction
 applyFriction friction env maybeParent game entity =
     let
         absoluteVelocity =
@@ -42,7 +42,7 @@ applyFriction friction env maybeParent game entity =
         |> entityOnly game
 
 
-moveCollideAndSlide : UpdateEntityFunction
+moveCollideAndSlide : EntityUpdateFunction
 moveCollideAndSlide env maybeParent game entity =
     let
         idealAbsolutePosition =
@@ -76,7 +76,7 @@ moveCollideAndSlide env maybeParent game entity =
         |> entityOnly game
 
 
-moveCollide : (Collision SquareCollider -> UpdateEntityFunction) -> UpdateEntityFunction
+moveCollide : (Collision SquareCollider -> EntityUpdateFunction) -> EntityUpdateFunction
 moveCollide onCollision env maybeParent game entity =
     let
         idealAbsolutePosition =

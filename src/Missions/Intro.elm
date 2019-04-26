@@ -47,37 +47,33 @@ init =
         [ zaneSays 1 "Oden! Can you hear me?"
         , odenSays 1 "This is a terrible idea..."
         , zaneSays 1 "ODEN! CAN. YOU. HEAR. ME?"
-        , odenSays 1 "..."
-        , odenSays 2 "Yes Zane, I can hear you loud and clear."
+        , odenSays 0.3 "..."
+        , odenSays 0.2 "-sigh-"
+        , odenSays 0.2 "Yes Zane, I can hear you loud and clear."
         ]
     ]
 
 
-
 uSeries : List (UpdateFunction -> UpdateFunction) -> UpdateFunction
 uSeries chainableFunctions env game =
-  case chainableFunctions of
-    [] ->
-      noOut game
+    case chainableFunctions of
+        [] ->
+            noOut game
 
-    f :: fs ->
-      f (uSeries fs) env game
-
-
-
+        f :: fs ->
+            f (uSeries fs) env game
 
 
 zaneSays : Seconds -> String -> UpdateFunction -> UpdateFunction
-zaneSays time content onDone  =
-    uLater time <| SpeechBubble.uNew Nothing content onDone
+zaneSays delay content onDone =
+    uLater delay <| SpeechBubble.uNew Nothing content onDone
 
 
 odenSays : Seconds -> String -> UpdateFunction -> UpdateFunction
-odenSays time content onDone =
-    uLater time <|
+odenSays delay content onDone =
+    uLater delay <|
         \env game ->
             SpeechBubble.uNew (Just game.playerId) content onDone env game
-
 
 
 addFadeIn : Seconds -> UpdateFunction
@@ -89,7 +85,7 @@ addFadeIn delay =
     uNewEntity Nothing
         [ \env maybeParent game entity ->
             entity
-                |> appendThinkFunctions [ EntityMain.killAfter (delay + duration) ]
+                |> appendEntityUpdateFunctions [ EntityMain.killAfter (delay + duration) ]
                 |> appendRenderFunctions [ fadeInRender delay duration ]
                 |> entityOnly game
         ]

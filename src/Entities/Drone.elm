@@ -55,7 +55,7 @@ canAttackAt =
 --
 
 
-init : ( Vector, Vector ) -> UpdateEntityFunction
+init : ( Vector, Vector ) -> EntityUpdateFunction
 init ( a, b ) env maybeParent game entity =
     { entity
         | size = droneSize
@@ -63,7 +63,7 @@ init ( a, b ) env maybeParent game entity =
         |> setPositionsFromRelative maybeParent (Vector.add a b |> Vector.scale 0.5)
         |> dronePatrolA.set a
         |> dronePatrolB.set b
-        |> appendThinkFunctions
+        |> appendEntityUpdateFunctions
             [ EntityMain.applyGravity
             , EntityMain.moveCollideAndSlide
             , patrol
@@ -80,7 +80,7 @@ init ( a, b ) env maybeParent game entity =
 -- Thinks
 
 
-patrol : UpdateEntityFunction
+patrol : EntityUpdateFunction
 patrol env maybeParent game entity =
     let
         a =
@@ -119,7 +119,7 @@ patrol env maybeParent game entity =
     )
 
 
-zapPlayer : UpdateEntityFunction
+zapPlayer : EntityUpdateFunction
 zapPlayer env maybeParent game drone =
     if game.time < canAttackAt.get drone then
         entityOnly game drone
@@ -139,7 +139,7 @@ zapPlayer env maybeParent game drone =
                         )
 
 
-zapProjectile : UpdateEntityFunction
+zapProjectile : EntityUpdateFunction
 zapProjectile env maybeParent game drone =
     let
         rr =

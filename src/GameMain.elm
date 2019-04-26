@@ -88,7 +88,7 @@ entityUpdate env maybeParent id ( game, os ) =
                 e.childrenIds
 
 
-entityExecuteOneUpdateFunction : UpdateEnv -> Maybe Parent -> WrappedUpdateEntityFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
+entityExecuteOneUpdateFunction : UpdateEnv -> Maybe Parent -> WrappedEntityUpdateFunction -> ( Entity, Game, List Outcome ) -> ( Entity, Game, List Outcome )
 entityExecuteOneUpdateFunction env maybeParent (WrapEntityFunction f) ( entity, game, os ) =
     let
         ( e, w, o ) =

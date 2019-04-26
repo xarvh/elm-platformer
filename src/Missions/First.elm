@@ -69,7 +69,7 @@ addFadeIn =
     uNewEntity Nothing
         [ \env maybeParent game entity ->
             entity
-                |> appendThinkFunctions [{- tTimeToLive duration -}]
+                |> appendEntityUpdateFunctions [{- tTimeToLive duration -}]
                 |> appendRenderFunctions [ fadeInRender duration ]
                 |> entityOnly game
         ]
