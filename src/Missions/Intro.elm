@@ -33,12 +33,9 @@ component =
 init : List UpdateFunction
 init =
     [ \env game ->
-        { game
-            | mapWidth = map.width
-            , mapHeight = map.height
-            , mapTiles = map.tiles
-        }
-            |> noOut
+      game
+        |> map.set
+        |> noOut
     , uNewEntity Nothing
         [ PlayerMain.init map.pois.startingPosition
         ]

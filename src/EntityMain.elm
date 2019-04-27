@@ -52,7 +52,7 @@ moveCollideAndSlide env maybeParent game entity =
 
         collisions =
             TileCollision.collide
-                (getTileType game >> .collider)
+                (getForegroundTile game >> .collider)
                 { width = entity.size.width
                 , height = entity.size.height
                 , start = entity.absolutePosition
@@ -86,7 +86,7 @@ moveCollide onCollision env maybeParent game entity =
 
         maybeCollision =
             TileCollision.collideOnce
-                (getTileType game >> .collider)
+                (getForegroundTile game >> .collider)
                 { width = entity.size.width
                 , height = entity.size.height
                 , start = entity.absolutePosition

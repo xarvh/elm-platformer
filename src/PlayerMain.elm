@@ -349,7 +349,7 @@ floorAllowsJumpDown game entity =
             { row = collision.tile.row
             , column = coordinateToTile entity.absolutePosition.x
             }
-                |> getTileType game
+                |> getForegroundTile game
                 |> .jumpDown
 
 
@@ -367,7 +367,7 @@ ceilingHasSpace game entity =
 
         collisions =
             TileCollision.collide
-                (getTileType game >> .collider)
+                (getForegroundTile game >> .collider)
                 { width = entity.size.width
                 , height = entity.size.height
                 , start = startPosition
@@ -385,7 +385,7 @@ canReachLadder game entity =
     , width = entity.size.width
     }
         |> TileCollision.sweep
-        |> List.any (getTileType game >> .isLadder)
+        |> List.any (getForegroundTile game >> .isLadder)
 
 
 uIncreaseDarkness : UpdateFunction

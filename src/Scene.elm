@@ -131,24 +131,22 @@ entities { viewportSize, game } =
             GameMain.renderEntities baseUniforms renderEnv game
 
         -- Tiles
-        leafToWebGl =
-            Svgl.Tree.svglLeafToWebGLEntity baseUniforms
-
-        tilesTree =
+        rowColumns =
             visibleRowColumns game game.cameraPosition visibleWorldSize
-                |> List.map (renderTile game)
+
+        render getTile rowColumn =
+            Nest
+                [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row) ]
+                [ (getTile game rowColumn).render ]
+
+        appendTiles getTile =
+            rowColumns
+                |> List.map (render getTile)
                 |> Nest []
+                |> TransformTree.resolveAndAppend (Svgl.Tree.svglLeafToWebGLEntity baseUniforms) Mat4.identity
     in
     ( webGlEntities
-        |> TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree
+        |> appendTiles getForegroundTile
+        |> appendTiles getBackgroundTile
     , svgs
     )
-
-
-renderTile : Game -> RowColumn -> Svgl.Tree.TreeNode
-renderTile game rowColumn =
-    Nest
-        [ translate2 (toFloat rowColumn.column) (toFloat rowColumn.row)
-        ]
-        [ (getTileType game rowColumn).render
-        ]

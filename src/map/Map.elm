@@ -16,23 +16,57 @@ import Html
 import Tiles
 
 
-define : { tiles : List String, pois : pois } -> { tiles : Array Tiles.TileType, width : Int, height : Int, pois : pois }
-define { tiles, pois } =
-    { width =
-        tiles
-            |> List.map String.length
-            |> List.maximum
-            |> Maybe.withDefault 1
-    , height =
-        List.length tiles
-    , tiles =
-        tiles
-            |> String.join ""
-            |> String.toList
-            |> List.map Tiles.idToTileType
-            |> Array.fromList
-    , pois = pois
+type alias RawMap pointsOfInterest =
+    { foreground : List String
+    , background : List String
+    , pois : pointsOfInterest
     }
+
+
+type alias Game game =
+    { game
+        | mapBackgroundTiles : Array Tiles.BackgroundTile
+        , mapForegroundTiles : Array Tiles.ForegroundTile
+        , mapWidth : Int
+        , mapHeight : Int
+    }
+
+
+type alias UsableMap pointsOfInterest game =
+    { pois : pointsOfInterest
+    , set : Game game -> Game game
+    }
+
+
+define : RawMap pointsOfInterest -> UsableMap pointsOfInterest game
+define raw =
+    { pois = raw.pois
+    , set =
+        \game ->
+            { game
+                | mapWidth =
+                    raw.foreground
+                        |> List.map String.length
+                        |> List.maximum
+                        |> Maybe.withDefault 1
+                , mapHeight =
+                    List.length raw.foreground
+                , mapForegroundTiles =
+                    stringToTiles Tiles.idToForegroundTile raw.foreground
+                , mapBackgroundTiles =
+                    stringToTiles Tiles.idToBackgroundTile raw.background
+            }
+    }
+
+
+stringToTiles : (Char -> tile) -> List String -> Array tile
+stringToTiles idToTile tilesAsStrings =
+    tilesAsStrings
+        -- TODO pad to width? For now can assume correctness
+        |> String.join ""
+        |> String.toList
+        |> List.map idToTile
+        |> Array.fromList
 
 
 prog _ =

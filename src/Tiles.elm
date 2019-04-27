@@ -12,13 +12,19 @@ platformThickness =
     0.2
 
 
-type alias TileType =
+type alias ForegroundTile =
     { id : Char
     , jumpDown : Bool
     , hasCeilingSpace : Bool
     , isLadder : Bool
     , render : TreeNode
     , collider : TileCollider SquareCollider
+    }
+
+
+type alias BackgroundTile =
+    { id : Char
+    , render : TreeNode
     }
 
 
@@ -60,9 +66,9 @@ fixSpeed collisions speed =
 --
 
 
-tilesById : Dict Char TileType
-tilesById =
-    [ none
+foregroundTilesById : Dict Char ForegroundTile
+foregroundTilesById =
+    [ foregroundNone
     , transparentBlocker
     , rivetedBlocker
     , oneWayPlatform
@@ -73,9 +79,21 @@ tilesById =
         |> List.foldl (\tile accum -> Dict.insert tile.id tile accum) Dict.empty
 
 
-idToTileType : Char -> TileType
-idToTileType id =
-    Maybe.withDefault none (Dict.get id tilesById)
+idToForegroundTile : Char -> ForegroundTile
+idToForegroundTile id =
+    Maybe.withDefault foregroundNone (Dict.get id foregroundTilesById)
+
+
+backgroundTilesById : Dict Char BackgroundTile
+backgroundTilesById =
+    [ backgroundNone
+    ]
+        |> List.foldl (\tile accum -> Dict.insert tile.id tile accum) Dict.empty
+
+
+idToBackgroundTile : Char -> BackgroundTile
+idToBackgroundTile id =
+    Maybe.withDefault backgroundNone (Dict.get id backgroundTilesById)
 
 
 
@@ -121,11 +139,11 @@ squareObstacle =
 
 
 
--- Tiles
+-- Foreground Tiles
 
 
-none : TileType
-none =
+foregroundNone : ForegroundTile
+foregroundNone =
     { id = ' '
     , jumpDown = False
     , hasCeilingSpace = True
@@ -135,7 +153,7 @@ none =
     }
 
 
-transparentBlocker : TileType
+transparentBlocker : ForegroundTile
 transparentBlocker =
     { id = '\''
     , jumpDown = False
@@ -152,7 +170,7 @@ transparentBlocker =
     }
 
 
-rivetedBlocker : TileType
+rivetedBlocker : ForegroundTile
 rivetedBlocker =
     { id = '#'
     , jumpDown = False
@@ -191,7 +209,7 @@ rivetedBlocker =
     }
 
 
-oneWayPlatform : TileType
+oneWayPlatform : ForegroundTile
 oneWayPlatform =
     { id = '-'
     , jumpDown = True
@@ -216,7 +234,7 @@ oneWayPlatform =
     }
 
 
-crossedStruts : TileType
+crossedStruts : ForegroundTile
 crossedStruts =
     { id = 'X'
     , jumpDown = False
@@ -260,7 +278,7 @@ crossedStruts =
     }
 
 
-ground : TileType
+ground : ForegroundTile
 ground =
     { id = '*'
     , collider = squareObstacle
@@ -279,7 +297,7 @@ ground =
     }
 
 
-ladder : TileType
+ladder : ForegroundTile
 ladder =
     { id = 'H'
     , jumpDown = False
@@ -306,4 +324,15 @@ ladder =
             , rect { params | w = 0.15, x = -0.35 }
             , rect { params | w = 0.15, x = 0.35 }
             ]
+    }
+
+
+
+-- Background tiles
+
+
+backgroundNone : BackgroundTile
+backgroundNone =
+    { id = ' '
+    , render = Nest [] []
     }

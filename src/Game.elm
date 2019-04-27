@@ -16,7 +16,7 @@ import Set exposing (Set)
 import Svg exposing (Svg)
 import Svgl.Tree
 import TileCollision exposing (Collision)
-import Tiles exposing (SquareCollider, TileType)
+import Tiles exposing (BackgroundTile, ForegroundTile, SquareCollider)
 import Vector exposing (Vector)
 import Viewport
 import WebGL
@@ -88,7 +88,8 @@ type alias Game =
     -- Map
     , mapWidth : Int
     , mapHeight : Int
-    , mapTiles : Array TileType
+    , mapForegroundTiles : Array ForegroundTile
+    , mapBackgroundTiles : Array BackgroundTile
 
     -- TODO use an animation type here
     , darknessState : Float
@@ -115,7 +116,8 @@ new =
     --
     , mapWidth = 1
     , mapHeight = 1
-    , mapTiles = Array.fromList []
+    , mapForegroundTiles = Array.fromList []
+    , mapBackgroundTiles = Array.fromList []
 
     --
     , darknessState = 0
@@ -560,14 +562,24 @@ setVelocitiesFromAbsolute maybeParent absoluteVelocity entity =
 -- Map helpers
 
 
-getTileType : Game -> RowColumn -> TileType
-getTileType game { row, column } =
-    case Array.get (column + (game.mapHeight - row - 1) * game.mapWidth) game.mapTiles of
-        Just tileType ->
-            tileType
+getForegroundTile : Game -> RowColumn -> ForegroundTile
+getForegroundTile game { row, column } =
+    case Array.get (column + (game.mapHeight - row - 1) * game.mapWidth) game.mapForegroundTiles of
+        Just tile ->
+            tile
 
         Nothing ->
-            Tiles.none
+            Tiles.foregroundNone
+
+
+getBackgroundTile : Game -> RowColumn -> BackgroundTile
+getBackgroundTile game { row, column } =
+    case Array.get (column + (game.mapHeight - row - 1) * game.mapWidth) game.mapBackgroundTiles of
+        Just tile ->
+            tile
+
+        Nothing ->
+            Tiles.backgroundNone
 
 
 
