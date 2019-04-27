@@ -4,7 +4,7 @@ import Color exposing (Color, hsl, hsla)
 import Dict exposing (Dict)
 import Svgl.Tree exposing (TreeNode, defaultParams, ellipse, rect)
 import TileCollision exposing (Collision, RowColumn, TileCollider)
-import TransformTree exposing (Node(..))
+import TransformTree exposing (..)
 import Vector exposing (Vector)
 
 
@@ -87,6 +87,8 @@ idToForegroundTile id =
 backgroundTilesById : Dict Char BackgroundTile
 backgroundTilesById =
     [ backgroundNone
+    , rivetedPanel
+    , rivetedPanel3x3
     ]
         |> List.foldl (\tile accum -> Dict.insert tile.id tile accum) Dict.empty
 
@@ -335,4 +337,73 @@ backgroundNone : BackgroundTile
 backgroundNone =
     { id = ' '
     , render = Nest [] []
+    }
+
+
+rivetedPanel : BackgroundTile
+rivetedPanel =
+    { id = '#'
+    , render =
+        let
+            re =
+                { defaultParams
+                    | fill = Color.darkCharcoal
+                    , stroke = Color.charcoal
+                }
+
+            ell =
+                { defaultParams
+                    | fill = Color.charcoal
+                    , strokeWidth = 0
+                    , w = 0.1
+                    , h = 0.1
+                }
+
+            o =
+                0.37
+        in
+        Nest
+            []
+            [ rect re
+            , ellipse { ell | x = -o, y = -o }
+            , ellipse { ell | x = o, y = -o }
+            , ellipse { ell | x = o, y = o }
+            , ellipse { ell | x = -o, y = o }
+            ]
+    }
+
+
+rivetedPanel3x3 : BackgroundTile
+rivetedPanel3x3 =
+    { id = '3'
+    , render =
+        let
+            re =
+                { defaultParams
+                    | fill = Color.darkCharcoal
+                    , stroke = Color.charcoal
+                    , w = 3
+                    , h = 3
+                }
+
+            ell =
+                { defaultParams
+                    | fill = Color.charcoal
+                    , strokeWidth = 0
+                    , w = 0.1
+                    , h = 0.1
+                }
+
+            o =
+                1.37
+        in
+        Nest
+            [ translate2 1 1
+            ]
+            [ rect re
+            , ellipse { ell | x = -o, y = -o }
+            , ellipse { ell | x = o, y = -o }
+            , ellipse { ell | x = o, y = o }
+            , ellipse { ell | x = -o, y = o }
+            ]
     }
