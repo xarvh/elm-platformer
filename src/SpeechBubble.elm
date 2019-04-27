@@ -75,6 +75,18 @@ applyWidth id width game =
     { game | entitiesById = Dict.update id (Maybe.map <| cTextWidth.set width) game.entitiesById }
 
 
+resetAll : Game -> Game
+resetAll game =
+    let
+        resetTextWidth id entity =
+            if cTextWidth.get entity == 0 then
+                entity
+            else
+                cTextWidth.set 0 entity
+    in
+    { game | entitiesById = Dict.map resetTextWidth game.entitiesById }
+
+
 
 -- Render
 

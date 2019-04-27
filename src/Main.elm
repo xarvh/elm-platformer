@@ -98,7 +98,7 @@ update msg model =
             noCmd model
 
         OnResize size ->
-            { model | viewportSize = size }
+            { model | viewportSize = size, game = SpeechBubble.resetAll model.game }
                 |> noCmd
 
         OnKey keymsg ->
