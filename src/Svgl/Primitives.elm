@@ -2,6 +2,8 @@ module Svgl.Primitives
     exposing
         ( PrimitiveShape(..)
         , Uniforms
+        , Attributes
+        , normalizedQuadMesh
         , defaultUniforms
         , ellipse
         , rect

@@ -14,11 +14,12 @@ import Keyboard
 import Keyboard.Arrows
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Nbsp exposing (nbsp)
 import Pois exposing (Pois)
 import Svg exposing (Svg)
 import Svg.Attributes as SA
-import Svgl.Primitives exposing (defaultUniforms, rect)
+import Svgl.Primitives exposing (Attributes, defaultUniforms, rect)
 import Svgl.Tree
 import Task
 import Tiles exposing (SquareCollider, TileType)
@@ -26,7 +27,8 @@ import TransformTree exposing (..)
 import Vector exposing (Vector)
 import Viewport exposing (Viewport)
 import Viewport.Combine
-import WebGL
+import WebGL exposing (Shader)
+import WebGL.Texture exposing (Texture)
 
 
 -- types
@@ -55,6 +57,7 @@ type alias UndoSnapshot =
 
 type alias Model =
     { viewport : Viewport
+    , maybeTileSprites : Maybe Texture
     , mousePixelPosition : Viewport.PixelPosition
     , mouseWorldPosition : Vector
     , mouseButtonIsDown : Bool
@@ -90,6 +93,7 @@ type Msg
     | OnMouseClickPoi String
     | OnRenamePoiInput String
     | OnClickTileBrush Char
+    | OnTextureLoad (Result WebGL.Texture.Error Texture)
 
 
 type alias MapBoundaries =
@@ -155,6 +159,7 @@ init map flags =
             , mouseButtonIsDown = False
             , newKeys = []
             , oldKeys = []
+            , maybeTileSprites = Nothing
 
             -- Editor meta
             , cameraPosition =
@@ -176,7 +181,10 @@ init map flags =
             }
 
         cmd =
-            Viewport.getWindowSize OnResize
+            Cmd.batch
+                [ Viewport.getWindowSize OnResize
+                , Task.attempt OnTextureLoad (WebGL.Texture.load "static/bulkhead.png")
+                ]
     in
     ( model, cmd )
 
@@ -360,6 +368,14 @@ update msg model =
         OnClickTileBrush id ->
             noCmd <|
                 { model | selectedTileBrushId = id }
+
+        OnTextureLoad result ->
+            case result of
+                Err err ->
+                    Debug.todo (Debug.toString err)
+
+                Ok texture ->
+                    noCmd { model | maybeTileSprites = Just texture }
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
@@ -741,6 +757,110 @@ removeRow row model =
 
 
 
+-- Tiles Palette -------------------------------------------------------------
+
+
+type alias Uniforms =
+    { entityToWorld : Mat4
+    , worldToCamera : Mat4
+    , tileSprites : Texture
+    }
+
+
+type alias Varying =
+    { localPosition : Vec2
+    , worldPosition : Vec2
+    }
+
+
+quadVertexShader : Shader Attributes Uniforms Varying
+quadVertexShader =
+    [glsl|
+        precision mediump float;
+        precision mediump int;
+
+        attribute vec2 position;
+
+        uniform mat4 entityToWorld;
+        uniform mat4 worldToCamera;
+
+        varying vec2 localPosition;
+        varying vec2 worldPosition;
+
+        void main () {
+            localPosition = position;
+            vec4 worldPosition4 = entityToWorld * vec4(localPosition, 0, 1);
+
+            worldPosition = worldPosition4.xy;
+            gl_Position = worldToCamera * worldPosition4;
+        }
+    |]
+
+
+fragmentShader : Shader {} Uniforms Varying
+fragmentShader =
+    [glsl|
+        precision mediump float;
+        precision mediump int;
+
+        varying vec2 localPosition;
+        varying vec2 worldPosition;
+
+        void main () {
+          gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+        }
+    |]
+
+
+spritesPalette : Texture -> Model -> ( List WebGL.Entity, List (Svg Msg) )
+spritesPalette tileSprites model =
+    let
+        widthInTiles =
+            8
+
+        heightInTiles =
+            7
+
+        visibleWorldSize =
+            Viewport.actualVisibleWorldSize model.viewport
+
+        paletteWidth =
+            toFloat widthInTiles
+
+        paletteHeight =
+            toFloat heightInTiles
+
+        paletteX =
+            -(visibleWorldSize.width / 2) + 1 + paletteWidth / 2
+
+        paletteY =
+            -(visibleWorldSize.height / 2) + 1 + paletteHeight / 2
+
+        worldToCamera =
+            model.viewport
+                |> Viewport.worldToCameraTransform
+
+        entityToWorld =
+            Mat4.makeTranslate3 paletteX paletteY 0
+
+        drawTile : Int -> Int -> WebGL.Entity
+        drawTile x y =
+            WebGL.entity quadVertexShader
+                fragmentShader
+                Svgl.Primitives.normalizedQuadMesh
+                { entityToWorld = entityToWorld
+                , worldToCamera = worldToCamera
+                , tileSprites = tileSprites
+                }
+    in
+    ( (widthInTiles - 1)
+        |> List.range 0
+        |> List.concatMap (\y -> List.range 0 (heightInTiles - 1) |> List.map (\x -> drawTile x y))
+    , []
+    )
+
+
+
 -- Scene ---------------------------------------------------------------------
 
 
@@ -771,13 +891,24 @@ entities model =
                 |> List.map renderTile
                 |> Nest []
 
+        tilesEntities =
+            TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree []
+
+        ( paletteEntities, paletteSvg ) =
+            case ( model.maybeTileSprites, model.mode ) of
+                ( Just tileSprites, ModeTiles ) ->
+                    spritesPalette tileSprites model
+
+                _ ->
+                    ( [], [] )
+
         svgs =
             model.pois
                 |> Dict.toList
                 |> List.map (renderPoi model worldToCamera)
     in
-    ( TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree []
-    , svgs
+    ( tilesEntities ++ paletteEntities
+    , svgs ++ paletteSvg
     )
 
 
