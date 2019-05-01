@@ -883,7 +883,6 @@ spritesPalette tileSprites model =
                     Mat4.identity
                         |> Mat4.scale3 (1 / 8) (1 / 8) 1
                         |> Mat4.translate3 (tOffX + 0.5) (tOffY + 0.5) 0
-                        |> Mat4.translate3 1 0 0
 
                 entityToWorld =
                     Mat4.identity
