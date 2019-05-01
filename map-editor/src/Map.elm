@@ -186,7 +186,7 @@ init map flags =
                 , minify = WebGL.Texture.nearest
                 , horizontalWrap = WebGL.Texture.mirroredRepeat
                 , verticalWrap = WebGL.Texture.mirroredRepeat
-                , flipY = False
+                , flipY = True
                 }
                 "static/bulkhead.png"
 
@@ -839,26 +839,29 @@ fragmentShader =
 spritesPalette : Texture -> Model -> ( List WebGL.Entity, List (Svg Msg) )
 spritesPalette tileSprites model =
     let
---         widthInTiles =
---             1
--- 
---         heightInTiles =
---             1
+        widthInTiles =
+            8
 
---         visibleWorldSize =
---             Viewport.actualVisibleWorldSize model.viewport
+        heightInTiles =
+            7
 
---         paletteWidth =
---             toFloat widthInTiles
--- 
---         paletteHeight =
---             toFloat heightInTiles
+        scale =
+            1 / max widthInTiles heightInTiles
 
---         paletteLeft =
---             -(visibleWorldSize.width / 2) + 1
--- 
---         paletteTop =
---             (visibleWorldSize.height / 2) - 1
+        visibleWorldSize =
+            Viewport.actualVisibleWorldSize model.viewport
+
+        paletteWidth =
+            toFloat widthInTiles
+
+        paletteHeight =
+            toFloat heightInTiles
+
+        paletteLeft =
+            -(visibleWorldSize.width / 2) + 1
+
+        paletteTop =
+            (visibleWorldSize.height / 2) - 1
 
         worldToCamera =
             model.viewport
@@ -867,12 +870,12 @@ spritesPalette tileSprites model =
         drawTile : Int -> Int -> WebGL.Entity
         drawTile tileX tileY =
             let
---                 x =
---                     paletteLeft + toFloat tileX
--- 
---                 y =
---                     paletteTop - toFloat tileY
--- 
+                x =
+                    paletteLeft + toFloat tileX
+
+                y =
+                    paletteTop - paletteHeight + toFloat tileY
+
                 tOffX =
                     toFloat tileX
 
@@ -881,14 +884,12 @@ spritesPalette tileSprites model =
 
                 entityToTexture =
                     Mat4.identity
-                        |> Mat4.scale3 (1 / 8) (1 / 8) 1
+                        |> Mat4.scale3 scale scale 1
                         |> Mat4.translate3 (tOffX + 0.5) (tOffY + 0.5) 0
 
                 entityToWorld =
                     Mat4.identity
---                         |> Mat4.translate3 x y 0
---                         |> Mat4.translate3 5 -5 0
-                        |> Mat4.scale3 8 8 1
+                        |> Mat4.translate3 x y 0
             in
             WebGL.entity
                 quadVertexShader
@@ -900,10 +901,10 @@ spritesPalette tileSprites model =
                 , tileSprites = tileSprites
                 }
     in
---     ( (widthInTiles - 1)
---         |> List.range 0
---         |> List.concatMap (\y -> List.range 0 (heightInTiles - 1) |> List.map (\x -> drawTile x y))
-    ( [ drawTile 0 0]
+    ( (widthInTiles - 1)
+        |> List.range 0
+        |> List.concatMap (\x -> List.range 0 (heightInTiles - 1) |> List.map (\y -> drawTile x y))
+      --     ( [ drawTile 0 0]
     , []
     )
 
