@@ -37,7 +37,10 @@ import WebGL.Texture exposing (Texture)
 type alias Pair =
     ( Int, Int )
 
-type alias TileId = Int
+
+type alias TileId =
+    { l : Int, b : Int }
+
 
 type Mode
     = ModeTiles
@@ -136,7 +139,8 @@ init : Map pois -> {} -> ( Model, Cmd Msg )
 init map flags =
     let
         tiles =
-            fromHumanMap map
+            --TODO
+            Dict.empty
 
         pois =
             case Pois.parse (Debug.toString map.pois) of
@@ -167,7 +171,7 @@ init map flags =
                 { x = 0.5 * toFloat (maxX + minX)
                 , y = 0.5 * toFloat (maxY + minY)
                 }
-            , selectedTileBrushId = 0
+            , selectedTileBrushId = { l = 0, b = 0 }
             , mode = ModeTiles
             , showSave = False
             , undoHistory = []
@@ -202,90 +206,88 @@ init map flags =
 
 
 --
+{-
+   fromHumanMap : Map a -> Dict Pair TileId
+   fromHumanMap map =
+       let
+           height =
+               List.length map.tiles
+
+           width =
+               map.tiles
+                   |> List.map String.length
+                   |> List.maximum
+                   |> Maybe.withDefault 20
+       in
+       map.tiles
+           |> List.reverse
+           |> List.indexedMap (\y -> String.toList >> List.indexedMap (\x c -> ( ( x, y ), c )))
+           |> List.concat
+           |> Dict.fromList
 
 
-fromHumanMap : Map a -> Dict Pair TileId
-fromHumanMap map =
-    let
-        height =
-            List.length map.tiles
+   toHumanMap : Pois -> Dict Pair TileId -> ( List String, Pois )
+   toHumanMap pois tiles =
+       let
+           bounds =
+               mapBoundaries tiles
 
-        width =
-            map.tiles
-                |> List.map String.length
-                |> List.maximum
-                |> Maybe.withDefault 20
-    in
-    map.tiles
-        |> List.reverse
-        |> List.indexedMap (\y -> String.toList >> List.indexedMap (\x c -> ( ( x, y ), c )))
-        |> List.concat
-        |> Dict.fromList
+           rx =
+               List.range bounds.minX bounds.maxX
 
+           ry =
+               List.range bounds.minY bounds.maxY
 
-toHumanMap : Pois -> Dict Pair TileId -> ( List String, Pois )
-toHumanMap pois tiles =
-    let
-        bounds =
-            mapBoundaries tiles
+           get x y =
+               tiles
+                   |> Dict.get ( x, y )
+                   |> Maybe.withDefault ' '
 
-        rx =
-            List.range bounds.minX bounds.maxX
+           makeRow y =
+               rx
+                   |> List.map (\x -> get x y)
+                   |> String.fromList
 
-        ry =
-            List.range bounds.minY bounds.maxY
-
-        get x y =
-            tiles
-                |> Dict.get ( x, y )
-                |> Maybe.withDefault ' '
-
-        makeRow y =
-            rx
-                |> List.map (\x -> get x y)
-                |> String.fromList
-
-        offset =
-            Vector (toFloat -bounds.minX) (toFloat -bounds.minY)
-    in
-    ( ry
-        |> List.map makeRow
-        |> List.reverse
-    , pois
-        |> Dict.map (\id value -> Vector.sub value offset)
-    )
-
-
-asFile : Model -> String
-asFile model =
-    let
-        ( mapRows, fixedPois ) =
-            toHumanMap model.pois model.tiles
-                |> Tuple.mapFirst (List.map Debug.toString)
-
-        poisKeyValues =
-            model.pois
-                |> Dict.toList
-                |> List.sortBy Tuple.first
-                |> List.map (\( k, v ) -> k ++ " = " ++ Debug.toString v)
-    in
-    """
-import Map
-
-
-main =
-    Map.define
-        { tiles =
-            [ """ ++ String.join "\n            , " mapRows ++ """
-            ]
-        , pois =
-            { """ ++ String.join "\n            , " poisKeyValues ++ """
-            }
-        }
-"""
+           offset =
+               Vector (toFloat -bounds.minX) (toFloat -bounds.minY)
+       in
+       ( ry
+           |> List.map makeRow
+           |> List.reverse
+       , pois
+           |> Dict.map (\id value -> Vector.sub value offset)
+       )
 
 
 
+   asFile : Model -> String
+   asFile model =
+       let
+           ( mapRows, fixedPois ) =
+               toHumanMap model.pois model.tiles
+                   |> Tuple.mapFirst (List.map Debug.toString)
+
+           poisKeyValues =
+               model.pois
+                   |> Dict.toList
+                   |> List.sortBy Tuple.first
+                   |> List.map (\( k, v ) -> k ++ " = " ++ Debug.toString v)
+       in
+       """
+   import Map
+
+
+   main =
+       Map.define
+           { tiles =
+               [ """ ++ String.join "\n            , " mapRows ++ """
+               ]
+           , pois =
+               { """ ++ String.join "\n            , " poisKeyValues ++ """
+               }
+           }
+   """
+-}
 -- update
 
 
@@ -413,9 +415,8 @@ updateOnKeyChange maybeKeyChange model =
                             { model | mode = ModeTiles }
 
                         -- Save
-                        ( _, Keyboard.Character "s" ) ->
-                            { model | showSave = not model.showSave }
-
+                        --                         ( _, Keyboard.Character "s" ) ->
+                        --                             { model | showSave = not model.showSave }
                         ( _, Keyboard.Escape ) ->
                             { model | showSave = False }
 
@@ -619,16 +620,16 @@ redo model =
 
 
 moveTileBrushSelection : Int -> Int -> Model -> Model
-moveTileBrushSelection dx dy model =
+moveTileBrushSelection dl db model =
     let
         -- TODO replace hardcoded 8
-        x = modBy 8 model.selectedTileBrushId
-        y = model.selectedTileBrushId // 8
+        l =
+            modBy 8 (model.selectedTileBrushId.l + dl + 8)
 
-        newId =
-          (x + dx) + (y + dy) * 8
+        b =
+            modBy 8 (model.selectedTileBrushId.b + db + 8)
     in
-    { model | selectedTileBrushId = newId }
+    { model | selectedTileBrushId = { l = l, b = b } }
 
 
 replaceTile : Model -> Model
@@ -842,7 +843,7 @@ spritesPalette tileSprites model =
             8
 
         heightInTiles =
-            7
+            8
 
         scale =
             1 / max widthInTiles heightInTiles
@@ -859,12 +860,30 @@ spritesPalette tileSprites model =
         paletteLeft =
             -(visibleWorldSize.width / 2) + 1
 
-        paletteTop =
-            (visibleWorldSize.height / 2) - 1
+        paletteBottom =
+            (visibleWorldSize.height / 2) - paletteHeight - 1
 
         worldToCamera =
             model.viewport
                 |> Viewport.worldToCameraTransform
+
+        selection =
+            Svg.rect
+                [ worldToCamera
+                    |> Mat4.translate3
+                        (paletteLeft + toFloat model.selectedTileBrushId.l)
+                        (paletteBottom + toFloat model.selectedTileBrushId.b)
+                        0
+                    |> Viewport.Combine.transform
+                , SA.fill "none"
+                , SA.stroke "red"
+                , SA.strokeWidth "0.1"
+                , SA.x "0"
+                , SA.y "0"
+                , SA.width "1"
+                , SA.height "1"
+                ]
+                []
 
         drawTile : Int -> Int -> WebGL.Entity
         drawTile tileX tileY =
@@ -873,7 +892,7 @@ spritesPalette tileSprites model =
                     paletteLeft + toFloat tileX
 
                 y =
-                    paletteTop - paletteHeight + toFloat tileY
+                    paletteBottom + toFloat tileY
 
                 tOffX =
                     toFloat tileX
@@ -888,7 +907,7 @@ spritesPalette tileSprites model =
 
                 entityToWorld =
                     Mat4.identity
-                        |> Mat4.translate3 x y 0
+                        |> Mat4.translate3 (x + 0.5) (y + 0.5) 0
             in
             WebGL.entity
                 quadVertexShader
@@ -903,8 +922,7 @@ spritesPalette tileSprites model =
     ( (widthInTiles - 1)
         |> List.range 0
         |> List.concatMap (\x -> List.range 0 (heightInTiles - 1) |> List.map (\y -> drawTile x y))
-      --     ( [ drawTile 0 0]
-    , []
+    , [ selection ]
     )
 
 
@@ -965,7 +983,7 @@ renderTile ( ( x, y ), id ) =
     Nest
         [ translate2 (toFloat x) (toFloat y)
         ]
-        [ (Tiles.idToTileType id).render
+        [--TODO NEXT (Tiles.idToTileType id).render
         ]
 
 
@@ -976,7 +994,7 @@ getTileId model pair =
             id
 
         Nothing ->
-            ' '
+            { l = 0, b = 0 }
 
 
 renderPoi : Model -> Mat4 -> ( String, Vector ) -> Svg Msg
@@ -1127,7 +1145,7 @@ viewSave model =
         ]
         [ Html.pre []
             [ Html.code []
-                [ Html.text (asFile model)
+                [--TODO Html.text (asFile model)
                 ]
             ]
         ]
