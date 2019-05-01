@@ -37,6 +37,7 @@ import WebGL.Texture exposing (Texture)
 type alias Pair =
     ( Int, Int )
 
+type alias TileId = Int
 
 type Mode
     = ModeTiles
@@ -50,7 +51,7 @@ type alias Map pois =
 
 
 type alias UndoSnapshot =
-    { tiles : Dict Pair Char
+    { tiles : Dict Pair TileId
     , pois : Dict String Vector
     }
 
@@ -66,7 +67,7 @@ type alias Model =
 
     -- Editor meta
     , cameraPosition : Vector
-    , selectedTileBrushId : Char
+    , selectedTileBrushId : TileId
     , mode : Mode
     , undoHistory : List UndoSnapshot
     , redoHistory : List UndoSnapshot
@@ -76,7 +77,7 @@ type alias Model =
     , showSave : Bool
 
     -- Map State
-    , tiles : Dict Pair Char
+    , tiles : Dict Pair TileId
     , pois : Pois
     }
 
@@ -92,7 +93,7 @@ type Msg
     | OnMouseLeavePoi String
     | OnMouseClickPoi String
     | OnRenamePoiInput String
-    | OnClickTileBrush Char
+    | OnClickTileBrush TileId
     | OnTextureLoad (Result WebGL.Texture.Error Texture)
 
 
@@ -166,7 +167,7 @@ init map flags =
                 { x = 0.5 * toFloat (maxX + minX)
                 , y = 0.5 * toFloat (maxY + minY)
                 }
-            , selectedTileBrushId = ' '
+            , selectedTileBrushId = 0
             , mode = ModeTiles
             , showSave = False
             , undoHistory = []
@@ -203,7 +204,7 @@ init map flags =
 --
 
 
-fromHumanMap : Map a -> Dict Pair Char
+fromHumanMap : Map a -> Dict Pair TileId
 fromHumanMap map =
     let
         height =
@@ -222,7 +223,7 @@ fromHumanMap map =
         |> Dict.fromList
 
 
-toHumanMap : Pois -> Dict Pair Char -> ( List String, Pois )
+toHumanMap : Pois -> Dict Pair TileId -> ( List String, Pois )
 toHumanMap pois tiles =
     let
         bounds =
@@ -333,9 +334,8 @@ update msg model =
                 |> noCmd
 
         OnMouseWheel deltaY ->
-            model
-                |> selectTileBrush (ifThenElse (deltaY < 0) -1 1)
-                |> noCmd
+            -- TODO zoom
+            noCmd model
 
         OnMouseButton isDown ->
             { model | mouseButtonIsDown = isDown }
@@ -455,11 +455,17 @@ updateOnKeyChange maybeKeyChange model =
                         ( ModeTiles, Keyboard.Character "C" ) ->
                             model |> removeColumn (round model.mouseWorldPosition.x)
 
-                        ( ModeTiles, Keyboard.Character "q" ) ->
-                            model |> selectTileBrush -1
+                        ( ModeTiles, Keyboard.Character "w" ) ->
+                            model |> moveTileBrushSelection 0 1
 
                         ( ModeTiles, Keyboard.Character "a" ) ->
-                            model |> selectTileBrush 1
+                            model |> moveTileBrushSelection -1 0
+
+                        ( ModeTiles, Keyboard.Character "s" ) ->
+                            model |> moveTileBrushSelection 0 -1
+
+                        ( ModeTiles, Keyboard.Character "d" ) ->
+                            model |> moveTileBrushSelection 1 0
 
                         -- Mode: Pois
                         ( ModePois, Keyboard.Character "a" ) ->
@@ -612,22 +618,15 @@ redo model =
 -- Brush ---------------------------------------------------------------------
 
 
-selectTileBrush : Int -> Model -> Model
-selectTileBrush d model =
+moveTileBrushSelection : Int -> Int -> Model -> Model
+moveTileBrushSelection dx dy model =
     let
-        currentIndex =
-            sortedTiles
-                |> List.Extra.findIndex (\t -> t.id == model.selectedTileBrushId)
-                |> Maybe.withDefault 0
-
-        newIndex =
-            modBy (List.length sortedTiles) (currentIndex + d)
+        -- TODO replace hardcoded 8
+        x = modBy 8 model.selectedTileBrushId
+        y = model.selectedTileBrushId // 8
 
         newId =
-            sortedTiles
-                |> List.Extra.getAt newIndex
-                |> Maybe.map .id
-                |> Maybe.withDefault ' '
+          (x + dx) + (y + dy) * 8
     in
     { model | selectedTileBrushId = newId }
 
@@ -961,7 +960,7 @@ entities model =
     )
 
 
-renderTile : ( Pair, Char ) -> Svgl.Tree.TreeNode
+renderTile : ( Pair, TileId ) -> Svgl.Tree.TreeNode
 renderTile ( ( x, y ), id ) =
     Nest
         [ translate2 (toFloat x) (toFloat y)
@@ -970,7 +969,7 @@ renderTile ( ( x, y ), id ) =
         ]
 
 
-getTileId : Model -> Pair -> Char
+getTileId : Model -> Pair -> TileId
 getTileId model pair =
     case Dict.get pair model.tiles of
         Just id ->
