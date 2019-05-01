@@ -180,10 +180,20 @@ init map flags =
             , tiles = tiles
             }
 
+        loadTextureTask =
+            WebGL.Texture.loadWith
+                { magnify = WebGL.Texture.nearest
+                , minify = WebGL.Texture.nearest
+                , horizontalWrap = WebGL.Texture.mirroredRepeat
+                , verticalWrap = WebGL.Texture.mirroredRepeat
+                , flipY = True
+                }
+                "static/bulkhead.png"
+
         cmd =
             Cmd.batch
                 [ Viewport.getWindowSize OnResize
-                , Task.attempt OnTextureLoad (WebGL.Texture.load "static/bulkhead.png")
+                , Task.attempt OnTextureLoad loadTextureTask
                 ]
     in
     ( model, cmd )
@@ -763,6 +773,7 @@ removeRow row model =
 type alias Uniforms =
     { entityToWorld : Mat4
     , worldToCamera : Mat4
+    , entityToTexture : Mat4
     , tileSprites : Texture
     }
 
@@ -803,11 +814,24 @@ fragmentShader =
         precision mediump float;
         precision mediump int;
 
+        uniform sampler2D tileSprites;
+        uniform mat4 entityToTexture;
+
         varying vec2 localPosition;
         varying vec2 worldPosition;
 
         void main () {
-          gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
+
+          float x = localPosition.x;
+          float y = localPosition.y;
+
+
+          vec4 textureCoordinates = entityToTexture * vec4(x, y, 0, 1);
+
+
+          vec4 src = texture2D(tileSprites, textureCoordinates.xy);
+
+          gl_FragColor = src; //vec4(1.0, 1.0, 1.0, 1.0);
         }
     |]
 
@@ -816,10 +840,10 @@ spritesPalette : Texture -> Model -> ( List WebGL.Entity, List (Svg Msg) )
 spritesPalette tileSprites model =
     let
         widthInTiles =
-            8
+            1
 
         heightInTiles =
-            7
+            1
 
         visibleWorldSize =
             Viewport.actualVisibleWorldSize model.viewport
@@ -830,26 +854,43 @@ spritesPalette tileSprites model =
         paletteHeight =
             toFloat heightInTiles
 
-        paletteX =
-            -(visibleWorldSize.width / 2) + 1 + paletteWidth / 2
+        paletteLeft =
+            -(visibleWorldSize.width / 2) + 1
 
-        paletteY =
-            -(visibleWorldSize.height / 2) + 1 + paletteHeight / 2
+        paletteTop =
+            (visibleWorldSize.height / 2) - 1
 
         worldToCamera =
             model.viewport
                 |> Viewport.worldToCameraTransform
 
-        entityToWorld =
-            Mat4.makeTranslate3 paletteX paletteY 0
-
         drawTile : Int -> Int -> WebGL.Entity
-        drawTile x y =
-            WebGL.entity quadVertexShader
+        drawTile tileX tileY =
+            let
+                x =
+                    paletteLeft + toFloat tileX
+
+                y =
+                    paletteTop - toFloat tileY
+
+                entityToTexture =
+                    Mat4.identity
+                        |> Mat4.translate3 0 -0.5 0
+                        --|> Mat4.scale3 (1 / 3) (1 / 2) 1
+
+                entityToWorld =
+                    Mat4.identity
+                        |> Mat4.translate3 x y 0
+                        |> Mat4.translate3 5 -5 0
+                        |> Mat4.scale3 8 8 1
+            in
+            WebGL.entity
+                quadVertexShader
                 fragmentShader
                 Svgl.Primitives.normalizedQuadMesh
                 { entityToWorld = entityToWorld
                 , worldToCamera = worldToCamera
+                , entityToTexture = entityToTexture
                 , tileSprites = tileSprites
                 }
     in
@@ -1013,7 +1054,7 @@ view model =
             }
         , case model.mode of
             ModeTiles ->
-                viewTileBrushPalette model
+                Html.text ""
 
             ModePois ->
                 viewPoisPalette model
@@ -1070,27 +1111,6 @@ viewPois model ( name, position ) =
                     ]
                 ]
                 [ Html.text name ]
-
-
-viewTileBrushPalette : Model -> Html Msg
-viewTileBrushPalette model =
-    sortedTiles
-        |> List.map (viewTileBrush model)
-        |> div [ class "palette brush-palette" ]
-
-
-viewTileBrush : Model -> TileType -> Html Msg
-viewTileBrush model tile =
-    let
-        ( l, r ) =
-            if model.selectedTileBrushId == tile.id then
-                ( "[ ", " ]" )
-            else
-                ( nbsp, nbsp )
-    in
-    div
-        [ Html.Events.onClick (OnClickTileBrush tile.id) ]
-        [ Html.text <| l ++ String.fromChar tile.id ++ r ]
 
 
 viewSave : Model -> Html Msg
