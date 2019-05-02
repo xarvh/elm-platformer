@@ -27,6 +27,8 @@ import Vector exposing (Vector)
 import Viewport exposing (Viewport)
 import Viewport.Combine
 import WebGL exposing (Shader)
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
 
 
@@ -771,6 +773,12 @@ removeRow row model =
 -- Tiles Palette -------------------------------------------------------------
 
 
+settings : List Setting
+settings =
+    -- https://limnu.com/webgl-blending-youre-probably-wrong/
+    [ Blend.add Blend.one Blend.oneMinusSrcAlpha ]
+
+
 type alias Uniforms =
     { entityToWorld : Mat4
     , worldToCamera : Mat4
@@ -832,7 +840,7 @@ fragmentShader =
 
           vec4 src = texture2D(tileSprites, textureCoordinates.xy);
 
-          gl_FragColor = src;
+          gl_FragColor = src.a * src;
         }
     |]
 
@@ -910,7 +918,8 @@ spritesPalette tileSprites model =
                     Mat4.identity
                         |> Mat4.translate3 (x + 0.5) (y + 0.5) 0
             in
-            WebGL.entity
+            WebGL.entityWith
+                settings
                 quadVertexShader
                 fragmentShader
                 Svgl.Primitives.normalizedQuadMesh
@@ -980,7 +989,8 @@ renderTile worldToCamera tileSprites ( ( tileX, tileY ), tileId ) =
             Mat4.identity
                 |> Mat4.translate3 (toFloat tileX) (toFloat tileY) 0
     in
-    WebGL.entity
+    WebGL.entityWith
+        settings
         quadVertexShader
         fragmentShader
         Svgl.Primitives.normalizedQuadMesh
