@@ -11,7 +11,6 @@ import Html.Events
 import Html.Events.Extra.Wheel
 import Json.Decode exposing (Decoder)
 import Keyboard
-import Keyboard.Arrows
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
@@ -394,7 +393,7 @@ updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
 updateOnKeyChange maybeKeyChange model =
     noCmd <|
         case maybeKeyChange of
-            Just (Keyboard.KeyUp key) ->
+            Just (Keyboard.KeyDown key) ->
                 if model.mode == ModePois && model.renamingPoi /= Nothing then
                     case key of
                         Keyboard.Enter ->
@@ -691,7 +690,9 @@ transfer updateBounds destinationToSourcePair model =
                 |> boundaries_fold copyTiles Dict.empty
 
         copyTiles destinationPair ts =
-            Dict.insert destinationPair (getTileId model (destinationToSourcePair destinationPair)) ts
+            Dict.empty
+
+        -- TODO Dict.insert destinationPair (getTileId model (destinationToSourcePair destinationPair)) ts
     in
     -- TODO: also modify pois
     { model | tiles = tiles }
@@ -938,27 +939,16 @@ entities model =
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 -model.cameraPosition.x -model.cameraPosition.y 0
 
-        visibleWorldSize =
-            Viewport.actualVisibleWorldSize model.viewport
-
-        baseUniforms =
-            { defaultUniforms
-                | worldToCamera = worldToCamera
-                , darknessIntensity = -10000
-            }
-
         -- Tiles
-        leafToWebGl =
-            Svgl.Tree.svglLeafToWebGLEntity baseUniforms
-
-        tilesTree =
-            model.tiles
-                |> Dict.toList
-                |> List.map renderTile
-                |> Nest []
-
         tilesEntities =
-            TransformTree.resolveAndAppend leafToWebGl Mat4.identity tilesTree []
+            case model.maybeTileSprites of
+                Nothing ->
+                    []
+
+                Just tileSprites ->
+                    model.tiles
+                        |> Dict.toList
+                        |> List.map (renderTile worldToCamera tileSprites)
 
         ( paletteEntities, paletteSvg ) =
             case ( model.maybeTileSprites, model.mode ) of
@@ -978,23 +968,27 @@ entities model =
     )
 
 
-renderTile : ( Pair, TileId ) -> Svgl.Tree.TreeNode
-renderTile ( ( x, y ), id ) =
-    Nest
-        [ translate2 (toFloat x) (toFloat y)
-        ]
-        [--TODO NEXT (Tiles.idToTileType id).render
-        ]
+renderTile : Mat4 -> Texture -> ( Pair, TileId ) -> WebGL.Entity
+renderTile worldToCamera tileSprites ( ( tileX, tileY ), tileId ) =
+    let
+        entityToTexture =
+            Mat4.identity
+                |> Mat4.scale3 (1 / 8) (1 / 8) 1
+                |> Mat4.translate3 (toFloat tileId.l + 0.5) (toFloat tileId.b + 0.5) 0
 
-
-getTileId : Model -> Pair -> TileId
-getTileId model pair =
-    case Dict.get pair model.tiles of
-        Just id ->
-            id
-
-        Nothing ->
-            { l = 0, b = 0 }
+        entityToWorld =
+            Mat4.identity
+                |> Mat4.translate3 (toFloat tileX) (toFloat tileY) 0
+    in
+    WebGL.entity
+        quadVertexShader
+        fragmentShader
+        Svgl.Primitives.normalizedQuadMesh
+        { entityToWorld = entityToWorld
+        , worldToCamera = worldToCamera
+        , entityToTexture = entityToTexture
+        , tileSprites = tileSprites
+        }
 
 
 renderPoi : Model -> Mat4 -> ( String, Vector ) -> Svg Msg
