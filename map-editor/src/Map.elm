@@ -16,12 +16,12 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
 import Nbsp exposing (nbsp)
 import Pois exposing (Pois)
+import Set exposing (Set)
 import Svg exposing (Svg)
 import Svg.Attributes as SA
 import Svgl.Primitives exposing (Attributes, defaultUniforms, rect)
 import Svgl.Tree
 import Task
-import Tiles exposing (SquareCollider, TileType)
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 import Viewport exposing (Viewport)
@@ -35,29 +35,9 @@ import WebGL.Texture exposing (Texture)
 -- types
 
 
-type alias Pair =
-    ( Int, Int )
-
-
-type alias TileId =
-    { l : Int, b : Int }
-
-
 type Mode
     = ModeTiles
     | ModePois
-
-
-type alias Map pois =
-    { tiles : List String
-    , pois : pois
-    }
-
-
-type alias UndoSnapshot =
-    { tiles : Dict Pair TileId
-    , pois : Dict String Vector
-    }
 
 
 type alias Model =
@@ -71,18 +51,35 @@ type alias Model =
 
     -- Editor meta
     , cameraPosition : Vector
-    , selectedTileBrushId : TileId
+    , selectedTileBrushId : TileType
     , mode : Mode
-    , undoHistory : List UndoSnapshot
-    , redoHistory : List UndoSnapshot
+    , undoHistory : List MapState
+    , redoHistory : List MapState
     , hoveredPoi : String
     , selectedPoi : String
     , renamingPoi : Maybe ( String, String )
     , showSave : Bool
 
     -- Map State
-    , tiles : Dict Pair TileId
-    , pois : Pois
+    , tiles : Dict MapTileCoordinate TileType
+    , pois : Dict String Vector
+    }
+
+
+type alias MapTileCoordinate =
+    ( Int, Int, Int )
+
+
+type alias MapState =
+    { tiles : Dict MapTileCoordinate TileType
+    , pois : Dict String Vector
+    }
+
+
+type alias TileType =
+    { layer : Int
+    , spriteLeft : Int
+    , spriteBottom : Int
     }
 
 
@@ -97,7 +94,7 @@ type Msg
     | OnMouseLeavePoi String
     | OnMouseClickPoi String
     | OnRenamePoiInput String
-    | OnClickTileBrush TileId
+    | OnClickTileBrush TileType
     | OnTextureLoad (Result WebGL.Texture.Error Texture)
 
 
@@ -113,10 +110,24 @@ type alias MapBoundaries =
 --
 
 
-sortedTiles =
-    Tiles.tilesById
-        |> Dict.values
-        |> List.sortBy .id
+tileTypes : List TileType
+tileTypes =
+    let
+        backgroundLayer =
+            Set.fromList [ 20, 22 ]
+
+        makeTileType index =
+            { layer =
+                if Set.member index backgroundLayer then
+                    0
+                else
+                    1
+            , spriteLeft = modBy 8 index
+            , spriteBottom = 8 - index // 8
+            }
+    in
+    List.range 0 (28 - 1)
+        |> List.map makeTileType
 
 
 noCmd : Model -> ( Model, Cmd Msg )
@@ -136,7 +147,7 @@ ifThenElse condition then_ else_ =
 --
 
 
-init : Map pois -> {} -> ( Model, Cmd Msg )
+init : map -> {} -> ( Model, Cmd Msg )
 init map flags =
     let
         tiles =
@@ -144,13 +155,16 @@ init map flags =
             Dict.empty
 
         pois =
-            case Pois.parse (Debug.toString map.pois) of
-                Ok p ->
-                    p
+            Dict.empty
 
-                Err err ->
-                    Debug.todo (Debug.toString err)
+        {-
+           case Pois.parse (Debug.toString map.pois) of
+               Ok p ->
+                   p
 
+               Err err ->
+                   Debug.todo (Debug.toString err)
+        -}
         { minX, maxX, minY, maxY } =
             mapBoundaries tiles
 
@@ -172,7 +186,7 @@ init map flags =
                 { x = 0.5 * toFloat (maxX + minX)
                 , y = 0.5 * toFloat (maxY + minY)
                 }
-            , selectedTileBrushId = { l = 0, b = 0 }
+            , selectedTileBrushId = { layer = 1, spriteLeft = 0, spriteBottom = 0 }
             , mode = ModeTiles
             , showSave = False
             , undoHistory = []
@@ -565,14 +579,14 @@ deletePoi model =
 -- Undo ----------------------------------------------------------------------
 
 
-getUndoSnapshot : Model -> UndoSnapshot
+getUndoSnapshot : Model -> MapState
 getUndoSnapshot { pois, tiles } =
     { pois = pois
     , tiles = tiles
     }
 
 
-setUndoSnapshot : UndoSnapshot -> Model -> Model
+setUndoSnapshot : MapState -> Model -> Model
 setUndoSnapshot { pois, tiles } model =
     { model
         | pois = pois
@@ -625,12 +639,12 @@ moveTileBrushSelection dl db model =
     let
         -- TODO replace hardcoded 8
         l =
-            modBy 8 (model.selectedTileBrushId.l + dl + 8)
+            modBy 8 (model.selectedTileBrushId.spriteLeft + dl + 8)
 
         b =
-            modBy 8 (model.selectedTileBrushId.b + db + 8)
+            modBy 8 (model.selectedTileBrushId.spriteBottom + db + 8)
     in
-    { model | selectedTileBrushId = { l = l, b = b } }
+    { model | selectedTileBrushId = { layer = model.selectedTileBrushId.layer, spriteLeft = l, spriteBottom = b } }
 
 
 replaceTile : Model -> Model
@@ -646,7 +660,7 @@ replaceTile model =
             round position.x
 
         tiles =
-            Dict.insert ( round position.x, round position.y ) model.selectedTileBrushId model.tiles
+            Dict.insert ( model.selectedTileBrushId.layer, round position.x, round position.y ) model.selectedTileBrushId model.tiles
     in
     { model | tiles = tiles }
 
@@ -655,12 +669,13 @@ replaceTile model =
 -- Rows / Columns duplicate / remove -----------------------------------------
 
 
-mapBoundaries : Dict Pair a -> MapBoundaries
+mapBoundaries : Dict MapTileCoordinate a -> MapBoundaries
 mapBoundaries tiles =
     let
         ( xs, ys ) =
             tiles
                 |> Dict.keys
+                |> List.map (\( layer, left, bottom ) -> ( left, bottom ))
                 |> List.unzip
 
         mmin =
@@ -676,13 +691,23 @@ mapBoundaries tiles =
     }
 
 
-boundaries_fold : (Pair -> a -> a) -> a -> MapBoundaries -> a
+boundaries_fold : (MapTileCoordinate -> a -> a) -> a -> MapBoundaries -> a
 boundaries_fold fun zero { minX, maxX, minY, maxY } =
+    let
+        foldX x accum =
+            List.range minY maxY
+                |> List.foldl (foldY x) accum
+
+        foldY x y accum =
+            accum
+                |> fun ( 0, x, y )
+                |> fun ( 1, x, y )
+    in
     List.range minX maxX
-        |> List.foldl (\x accum -> List.range minY maxY |> List.foldl (\y a -> fun ( x, y ) a) accum) zero
+        |> List.foldl foldX zero
 
 
-transfer : (MapBoundaries -> MapBoundaries) -> (Pair -> Pair) -> Model -> Model
+transfer : (MapBoundaries -> MapBoundaries) -> (MapTileCoordinate -> MapTileCoordinate) -> Model -> Model
 transfer updateBounds destinationToSourcePair model =
     let
         tiles =
@@ -691,10 +716,8 @@ transfer updateBounds destinationToSourcePair model =
                 |> updateBounds
                 |> boundaries_fold copyTiles Dict.empty
 
-        copyTiles destinationPair ts =
-            Dict.empty
-
-        -- TODO Dict.insert destinationPair (getTileId model (destinationToSourcePair destinationPair)) ts
+        copyTiles dest ts =
+            Dict.update dest (\unused -> Dict.get (destinationToSourcePair dest) model.tiles) ts
     in
     -- TODO: also modify pois
     { model | tiles = tiles }
@@ -707,8 +730,9 @@ duplicateColumn column model =
         updateBounds bounds =
             { bounds | maxX = bounds.maxX + 1 }
 
-        destinationToSourcePair ( destX, destY ) =
-            ( if destX <= column then
+        destinationToSourcePair ( layer, destX, destY ) =
+            ( layer
+            , if destX <= column then
                 destX
               else
                 destX - 1
@@ -724,8 +748,9 @@ removeColumn column model =
         updateBounds bounds =
             { bounds | maxX = bounds.maxX - 1 }
 
-        destinationToSourcePair ( destX, destY ) =
-            ( if destX < column then
+        destinationToSourcePair ( layer, destX, destY ) =
+            ( layer
+            , if destX < column then
                 destX
               else
                 destX + 1
@@ -741,8 +766,9 @@ duplicateRow row model =
         updateBounds bounds =
             { bounds | maxY = bounds.maxY + 1 }
 
-        destinationToSourcePair ( destX, destY ) =
-            ( destX
+        destinationToSourcePair ( layer, destX, destY ) =
+            ( layer
+            , destX
             , if destY <= row then
                 destY
               else
@@ -758,8 +784,9 @@ removeRow row model =
         updateBounds bounds =
             { bounds | maxY = bounds.maxY - 1 }
 
-        destinationToSourcePair ( destX, destY ) =
-            ( destX
+        destinationToSourcePair ( layer, destX, destY ) =
+            ( layer
+            , destX
             , if destY < row then
                 destY
               else
@@ -880,8 +907,8 @@ spritesPalette tileSprites model =
             Svg.rect
                 [ worldToCamera
                     |> Mat4.translate3
-                        (paletteLeft + toFloat model.selectedTileBrushId.l)
-                        (paletteBottom + toFloat model.selectedTileBrushId.b)
+                        (paletteLeft + toFloat model.selectedTileBrushId.spriteLeft)
+                        (paletteBottom + toFloat model.selectedTileBrushId.spriteBottom)
                         0
                     |> Viewport.Combine.transform
                 , SA.fill "none"
@@ -957,6 +984,7 @@ entities model =
                 Just tileSprites ->
                     model.tiles
                         |> Dict.toList
+                        |> List.sortBy (\((layer, tileX, tileY), tileType) -> layer)
                         |> List.map (renderTile worldToCamera tileSprites)
 
         ( paletteEntities, paletteSvg ) =
@@ -977,13 +1005,13 @@ entities model =
     )
 
 
-renderTile : Mat4 -> Texture -> ( Pair, TileId ) -> WebGL.Entity
-renderTile worldToCamera tileSprites ( ( tileX, tileY ), tileId ) =
+renderTile : Mat4 -> Texture -> ( MapTileCoordinate, TileType ) -> WebGL.Entity
+renderTile worldToCamera tileSprites ( ( layer, tileX, tileY ), { spriteLeft, spriteBottom } ) =
     let
         entityToTexture =
             Mat4.identity
                 |> Mat4.scale3 (1 / 8) (1 / 8) 1
-                |> Mat4.translate3 (toFloat tileId.l + 0.5) (toFloat tileId.b + 0.5) 0
+                |> Mat4.translate3 (toFloat spriteLeft + 0.5) (toFloat spriteBottom + 0.5) 0
 
         entityToWorld =
             Mat4.identity
