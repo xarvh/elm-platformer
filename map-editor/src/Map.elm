@@ -875,6 +875,16 @@ fragmentShader =
 spritesPalette : Texture -> Model -> ( List WebGL.Entity, List (Svg Msg) )
 spritesPalette tileSprites model =
     let
+        typesToShow =
+            tileTypes
+                |> List.filter (\t -> t.layer == model.selectedTileBrushId.layer)
+
+        indexToPalettePosition index =
+          { x = toFloat (modBy 8 index)
+          , y = toFloat (index // 8)
+          }
+
+
         widthInTiles =
             8
 
@@ -902,14 +912,19 @@ spritesPalette tileSprites model =
         worldToCamera =
             model.viewport
                 |> Viewport.worldToCameraTransform
+                |> Mat4.translate3 paletteLeft paletteBottom 0
+
+
+        selectionPosition =
+          tileTypes
+           |> List.Extra.findIndex (\t -> t == model.selectedTileBrushId)
+           |> Maybe.withDefault 0
+           |> indexToPalettePosition
 
         selection =
             Svg.rect
                 [ worldToCamera
-                    |> Mat4.translate3
-                        (paletteLeft + toFloat model.selectedTileBrushId.spriteLeft)
-                        (paletteBottom + toFloat model.selectedTileBrushId.spriteBottom)
-                        0
+                    |> Mat4.translate3 selectionPosition.x selectionPosition.y 0
                     |> Viewport.Combine.transform
                 , SA.fill "none"
                 , SA.stroke "red"
@@ -921,20 +936,24 @@ spritesPalette tileSprites model =
                 ]
                 []
 
-        drawTile : Int -> Int -> WebGL.Entity
-        drawTile tileX tileY =
+        drawTile : Int -> TileType -> WebGL.Entity
+        drawTile index tileType =
             let
-                x =
-                    paletteLeft + toFloat tileX
+                -- position in the palette
+                paletteX =
 
-                y =
-                    paletteBottom + toFloat tileY
+                    -- TODO don't use hardcoded values
+                    toFloat (modBy 8 index)
 
+                paletteY =
+                    toFloat (index // 8)
+
+                -- position in the spritesheet texture
                 tOffX =
-                    toFloat tileX
+                    toFloat tileType.spriteLeft
 
                 tOffY =
-                    toFloat tileY
+                    toFloat tileType.spriteBottom
 
                 entityToTexture =
                     Mat4.identity
@@ -943,7 +962,7 @@ spritesPalette tileSprites model =
 
                 entityToWorld =
                     Mat4.identity
-                        |> Mat4.translate3 (x + 0.5) (y + 0.5) 0
+                        |> Mat4.translate3 (paletteX + 0.5) (paletteY + 0.5) 0
             in
             WebGL.entityWith
                 settings
@@ -956,9 +975,7 @@ spritesPalette tileSprites model =
                 , tileSprites = tileSprites
                 }
     in
-    ( (widthInTiles - 1)
-        |> List.range 0
-        |> List.concatMap (\x -> List.range 0 (heightInTiles - 1) |> List.map (\y -> drawTile x y))
+    ( List.indexedMap drawTile typesToShow
     , [ selection ]
     )
 
@@ -984,7 +1001,7 @@ entities model =
                 Just tileSprites ->
                     model.tiles
                         |> Dict.toList
-                        |> List.sortBy (\((layer, tileX, tileY), tileType) -> layer)
+                        |> List.sortBy (\( ( layer, tileX, tileY ), tileType ) -> layer)
                         |> List.map (renderTile worldToCamera tileSprites)
 
         ( paletteEntities, paletteSvg ) =

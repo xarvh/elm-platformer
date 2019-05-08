@@ -2,77 +2,61 @@ module Tileset exposing (..)
 
 import Dict exposing (Dict)
 import Set exposing (Set)
+import WebGL.Texture exposing (Texture)
 
 
-type alias Map =
-    { id : String
-    , tileset : Tileset
-    , foreground : Dict ( Int, Int ) TileType
-    , background : Dict ( Int, Int ) TileType
-    , poisByName : Dict String { x : Float, y : Float }
+type alias TileType =
+    -- id determines where in the tileset texture the type will be stored
+    { id : Int
+    , render : RenderableMode
+    , maybeBlocker : Maybe Blocker
+    , layer : Int
+    , alternativeGroupId : Int
+    , maybePattern : Maybe { patternId : Int, closedSides : ClosedSides }
+    }
+
+
+type RenderableMode
+    = RenderEmpty
+    | RenderableStatic SpriteId
+
+
+{-| determines the sprite within the sprites texture
+-}
+type alias SpriteId =
+    ( Int, Int )
+
+
+type Blocker
+    = BlockerFourSides
+    | BlockerOneWayPlatform
+
+
+type alias ClosedSides =
+    { left : Bool
+    , right : Bool
+    , up : Bool
+    , down : Bool
     }
 
 
 type alias Tileset =
-    { slugName : String
-
-    -- this is used only by the editor, to know what to delete
-    -- TODO, firstUnusedSprite : TileSpritesheetReference
-    , tiles : List TileType
-    , spriteWidthInTiles : Int
-    , spriteHeightInTiles : Int
+    { baseFileName : String
+    , tilesById : Dict Int TileType
+    , spriteTexture : Texture
+    , spriteRows : Int
+    , spriteCols : Int
     }
 
 
-type alias TileType =
-    { idWithinLayer : Int
-    , layer : Int
-    , maybeBlocker : Maybe Blocker
-    , animationMode : AnimationMode
 
-    -- How these ares used depends entirely on the AnimationMode
-    , aTilenimationDurationInFrames : Int
-    , spriteA : TileSpritesheetReference
-    , spriteB : TileSpritesheetReference
-    }
+-- ig api
+{-
+   load : String -> Tileset
 
 
-type Blocker
-    = OneWayPlatform
-    | FourSides
+   tileTypeIdToMaybeBlocker : Tileset -> Int -> Maybe Blocker
 
 
-type AnimationMode
-    = Static
-    | ForwardCycle
-
-
-tileset : Tileset
-tileset =
-    { fileName = "bulkhead"
-    , spriteWidthInTiles = 8
-    , spriteHeightInTiles = 7
-    , tiles =
-        let
-            blockers =
-                [ 0 ]
-        in
-        (8 * 7 - 1)
-            |> List.range 0
-            |> List.map (makeTile blockers)
-    }
-
-
-makeTile : List Int -> Int -> Tile
-makeTile blockers idWithinLayer =
-    { idWithinLayer = idWithinLayer
-    , layer = 0
-    , maybeBlocker = Nothing
-    , animationDurationInFrames = 0
-    , animationMode = Static
-
-    -- How these ares used depends entirely on the AnimationMode
-    , animationOffset = 0
-    , spriteSheetReferenceA = idWithinLayer
-    , spriteSheetReferenceB = 0
-    }
+   render : { mapTexture : Texture } -> Tileset -> { x : Float, y : Float, w : Float, h : Float } -> WebGL.Entity
+-}
