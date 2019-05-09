@@ -52,31 +52,13 @@ textureToTileset name spriteTexture =
         -- Empties
         --
         -- Background
-        [ { id = 0
-          , render = empty
-          , maybeBlocker = none
-          , layer = 0
-          , alternativeGroupId = 0
-          , maybePattern = Nothing
-          }
+        [ { id = 0, render = empty, maybeBlocker = Nothing, layer = 0, alternativeGroupId = 0, maybePattern = Nothing }
 
         -- Foreground
-        , { id = 1
-          , maybeBlocker = Nothing
-          , render = empty
-          , layer = 0
-          , alternativeGroupId = 0
-          , maybePattern = Nothing
-          }
+        , { id = 1, maybeBlocker = Nothing, render = empty, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
 
         -- Foreground transparent blocker
-        , { id = 2
-          , render = empty
-          , maybeBlocker = Just Tileset.BlockerFourSides
-          , layer = 1
-          , alternativeGroupId = 0
-          , maybePattern = Nothing
-          }
+        , { id = 2, render = empty, maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
 
         --
         -- PATTERN
@@ -92,8 +74,8 @@ textureToTileset name spriteTexture =
 
         -- upper 3
         , { id = 8, render = static ( 0, 2 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
-        , { id = 9, render = static ( 0, 2 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
-        , { id = 10, render = static ( 0, 2 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
+        , { id = 9, render = static ( 1, 2 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
+        , { id = 10, render = static ( 2, 2 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }
 
         -- vertical
         , { id = 11, render = static ( 3, 0 ), maybeBlocker = fourSides, layer = 1, alternativeGroupId = 0, maybePattern = Nothing }

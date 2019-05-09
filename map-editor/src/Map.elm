@@ -14,6 +14,8 @@ import Keyboard
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2, vec2)
+import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Nbsp exposing (nbsp)
 import Pois exposing (Pois)
 import Set exposing (Set)
@@ -194,89 +196,6 @@ init map flags =
 
 
 
---
-{-
-   fromHumanMap : Map a -> Dict Pair TileId
-   fromHumanMap map =
-       let
-           height =
-               List.length map.tiles
-
-           width =
-               map.tiles
-                   |> List.map String.length
-                   |> List.maximum
-                   |> Maybe.withDefault 20
-       in
-       map.tiles
-           |> List.reverse
-           |> List.indexedMap (\y -> String.toList >> List.indexedMap (\x c -> ( ( x, y ), c )))
-           |> List.concat
-           |> Dict.fromList
-
-
-   toHumanMap : Pois -> Dict Pair TileId -> ( List String, Pois )
-   toHumanMap pois tiles =
-       let
-           bounds =
-               mapBoundaries tiles
-
-           rx =
-               List.range bounds.minX bounds.maxX
-
-           ry =
-               List.range bounds.minY bounds.maxY
-
-           get x y =
-               tiles
-                   |> Dict.get ( x, y )
-                   |> Maybe.withDefault ' '
-
-           makeRow y =
-               rx
-                   |> List.map (\x -> get x y)
-                   |> String.fromList
-
-           offset =
-               Vector (toFloat -bounds.minX) (toFloat -bounds.minY)
-       in
-       ( ry
-           |> List.map makeRow
-           |> List.reverse
-       , pois
-           |> Dict.map (\id value -> Vector.sub value offset)
-       )
-
-
-
-   asFile : Model -> String
-   asFile model =
-       let
-           ( mapRows, fixedPois ) =
-               toHumanMap model.pois model.tiles
-                   |> Tuple.mapFirst (List.map Debug.toString)
-
-           poisKeyValues =
-               model.pois
-                   |> Dict.toList
-                   |> List.sortBy Tuple.first
-                   |> List.map (\( k, v ) -> k ++ " = " ++ Debug.toString v)
-       in
-       """
-   import Map
-
-
-   main =
-       Map.define
-           { tiles =
-               [ """ ++ String.join "\n            , " mapRows ++ """
-               ]
-           , pois =
-               { """ ++ String.join "\n            , " poisKeyValues ++ """
-               }
-           }
-   """
--}
 -- update
 
 
@@ -895,6 +814,12 @@ fragmentShader =
 spritesPalette : Tileset -> Model -> ( List WebGL.Entity, List (Svg Msg) )
 spritesPalette tileset model =
     let
+        w =
+            toFloat tileset.spriteCols
+
+        h =
+            toFloat tileset.spriteRows
+
         indexToPalettePosition index =
             { x = toFloat (modBy tileset.spriteCols index)
             , y = toFloat (index // tileset.spriteCols)
@@ -913,6 +838,20 @@ spritesPalette tileset model =
             model.viewport
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 paletteLeft paletteBottom 0
+
+        background =
+            Svgl.Primitives.rect
+                { sh = 0
+                , entityToWorld = Mat4.makeTranslate3 (w / 2) (h / 2) 0
+                , worldToCamera = worldToCamera
+                , darknessFocus = vec2 0 0
+                , darknessIntensity = 0
+                , dimensions = vec2 w h
+                , fill = vec4 1 1 1 1
+                , stroke = vec4 1 1 1 1
+                , strokeWidth = 0
+                , opacity = 0.5
+                }
 
         selectionPosition =
             tileset.tileTypes
@@ -935,7 +874,9 @@ spritesPalette tileset model =
                 ]
                 []
     in
-    ( tileset.tileTypes |> List.indexedMap (drawTile tileset worldToCamera)
+    ( tileset.tileTypes
+        |> List.indexedMap (drawTile tileset worldToCamera)
+        |> (::) background
     , [ selection ]
     )
 
