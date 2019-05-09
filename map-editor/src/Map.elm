@@ -22,6 +22,8 @@ import Svg.Attributes as SA
 import Svgl.Primitives exposing (Attributes, defaultUniforms, rect)
 import Svgl.Tree
 import Task
+import Tileset exposing (TileType, Tileset)
+import Tileset.Bulkhead
 import TransformTree exposing (..)
 import Vector exposing (Vector)
 import Viewport exposing (Viewport)
@@ -42,7 +44,7 @@ type Mode
 
 type alias Model =
     { viewport : Viewport
-    , maybeTileSprites : Maybe Texture
+    , maybeTileset : Maybe Tileset
     , mousePixelPosition : Viewport.PixelPosition
     , mouseWorldPosition : Vector
     , mouseButtonIsDown : Bool
@@ -51,7 +53,7 @@ type alias Model =
 
     -- Editor meta
     , cameraPosition : Vector
-    , selectedTileBrushId : TileType
+    , selectedTileType : TileType
     , mode : Mode
     , undoHistory : List MapState
     , redoHistory : List MapState
@@ -76,13 +78,6 @@ type alias MapState =
     }
 
 
-type alias TileType =
-    { layer : Int
-    , spriteLeft : Int
-    , spriteBottom : Int
-    }
-
-
 type Msg
     = Noop
     | OnResize Viewport.PixelSize
@@ -95,7 +90,7 @@ type Msg
     | OnMouseClickPoi String
     | OnRenamePoiInput String
     | OnClickTileBrush TileType
-    | OnTextureLoad (Result WebGL.Texture.Error Texture)
+    | OnTilesetLoad (Result String Tileset)
 
 
 type alias MapBoundaries =
@@ -108,26 +103,6 @@ type alias MapBoundaries =
 
 
 --
-
-
-tileTypes : List TileType
-tileTypes =
-    let
-        backgroundLayer =
-            Set.fromList [ 20, 22 ]
-
-        makeTileType index =
-            { layer =
-                if Set.member index backgroundLayer then
-                    0
-                else
-                    1
-            , spriteLeft = modBy 8 index
-            , spriteBottom = 8 - index // 8
-            }
-    in
-    List.range 0 (28 - 1)
-        |> List.map makeTileType
 
 
 noCmd : Model -> ( Model, Cmd Msg )
@@ -168,6 +143,15 @@ init map flags =
         { minX, maxX, minY, maxY } =
             mapBoundaries tiles
 
+        placeholderTileType =
+            { id = -1
+            , render = Tileset.RenderEmpty
+            , maybeBlocker = Just Tileset.BlockerFourSides
+            , layer = 0
+            , alternativeGroupId = 0
+            , maybePattern = Nothing
+            }
+
         model =
             { viewport =
                 makeViewport
@@ -179,14 +163,14 @@ init map flags =
             , mouseButtonIsDown = False
             , newKeys = []
             , oldKeys = []
-            , maybeTileSprites = Nothing
+            , maybeTileset = Nothing
 
             -- Editor meta
             , cameraPosition =
                 { x = 0.5 * toFloat (maxX + minX)
                 , y = 0.5 * toFloat (maxY + minY)
                 }
-            , selectedTileBrushId = { layer = 1, spriteLeft = 0, spriteBottom = 0 }
+            , selectedTileType = placeholderTileType
             , mode = ModeTiles
             , showSave = False
             , undoHistory = []
@@ -200,20 +184,10 @@ init map flags =
             , tiles = tiles
             }
 
-        loadTextureTask =
-            WebGL.Texture.loadWith
-                { magnify = WebGL.Texture.nearest
-                , minify = WebGL.Texture.nearest
-                , horizontalWrap = WebGL.Texture.mirroredRepeat
-                , verticalWrap = WebGL.Texture.mirroredRepeat
-                , flipY = True
-                }
-                "static/bulkhead.png"
-
         cmd =
             Cmd.batch
                 [ Viewport.getWindowSize OnResize
-                , Task.attempt OnTextureLoad loadTextureTask
+                , Tileset.Bulkhead.load (\base -> "static/" ++ base ++ ".png") OnTilesetLoad
                 ]
     in
     ( model, cmd )
@@ -394,15 +368,15 @@ update msg model =
 
         OnClickTileBrush id ->
             noCmd <|
-                { model | selectedTileBrushId = id }
+                { model | selectedTileType = id }
 
-        OnTextureLoad result ->
+        OnTilesetLoad result ->
             case result of
                 Err err ->
-                    Debug.todo (Debug.toString err)
+                    Debug.todo err
 
-                Ok texture ->
-                    noCmd { model | maybeTileSprites = Just texture }
+                Ok tileset ->
+                    noCmd { model | maybeTileset = Just tileset }
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
@@ -636,15 +610,43 @@ redo model =
 
 moveTileBrushSelection : Int -> Int -> Model -> Model
 moveTileBrushSelection dl db model =
-    let
-        -- TODO replace hardcoded 8
-        l =
-            modBy 8 (model.selectedTileBrushId.spriteLeft + dl + 8)
+    case model.maybeTileset of
+        Nothing ->
+            model
 
-        b =
-            modBy 8 (model.selectedTileBrushId.spriteBottom + db + 8)
-    in
-    { model | selectedTileBrushId = { layer = model.selectedTileBrushId.layer, spriteLeft = l, spriteBottom = b } }
+        Just tileset ->
+            let
+                index =
+                    tileset.tileTypes
+                        |> List.sortBy .id
+                        |> List.Extra.findIndex ((==) model.selectedTileType)
+                        |> Maybe.withDefault 0
+
+                cols =
+                    tileset.spriteCols
+
+                rows =
+                    tileset.spriteRows
+
+                left =
+                    modBy cols <| modBy cols index + dl + cols
+
+                bottom =
+                    modBy rows <| (index // cols) + db + rows
+
+                tileType =
+                    tileset.tileTypes
+                        |> List.Extra.getAt (left + bottom * cols)
+                        |> Maybe.withDefault
+                            { id = -1
+                            , render = Tileset.RenderEmpty
+                            , maybeBlocker = Just Tileset.BlockerFourSides
+                            , layer = 0
+                            , alternativeGroupId = 0
+                            , maybePattern = Nothing
+                            }
+            in
+            { model | selectedTileType = tileType }
 
 
 replaceTile : Model -> Model
@@ -660,7 +662,7 @@ replaceTile model =
             round position.x
 
         tiles =
-            Dict.insert ( model.selectedTileBrushId.layer, round position.x, round position.y ) model.selectedTileBrushId model.tiles
+            Dict.insert ( model.selectedTileType.layer, round position.x, round position.y ) model.selectedTileType model.tiles
     in
     { model | tiles = tiles }
 
@@ -844,6 +846,24 @@ quadVertexShader =
     |]
 
 
+redShader : Shader {} Uniforms Varying
+redShader =
+    [glsl|
+        precision mediump float;
+        precision mediump int;
+
+        uniform sampler2D tileSprites;
+        uniform mat4 entityToTexture;
+
+        varying vec2 localPosition;
+        varying vec2 worldPosition;
+
+        void main () {
+          gl_FragColor = vec4(1, 0, 0, 1);
+        }
+    |]
+
+
 fragmentShader : Shader {} Uniforms Varying
 fragmentShader =
     [glsl|
@@ -872,54 +892,33 @@ fragmentShader =
     |]
 
 
-spritesPalette : Texture -> Model -> ( List WebGL.Entity, List (Svg Msg) )
-spritesPalette tileSprites model =
+spritesPalette : Tileset -> Model -> ( List WebGL.Entity, List (Svg Msg) )
+spritesPalette tileset model =
     let
-        typesToShow =
-            tileTypes
-                |> List.filter (\t -> t.layer == model.selectedTileBrushId.layer)
-
         indexToPalettePosition index =
-          { x = toFloat (modBy 8 index)
-          , y = toFloat (index // 8)
-          }
-
-
-        widthInTiles =
-            8
-
-        heightInTiles =
-            8
-
-        scale =
-            1 / max widthInTiles heightInTiles
+            { x = toFloat (modBy tileset.spriteCols index)
+            , y = toFloat (index // tileset.spriteCols)
+            }
 
         visibleWorldSize =
             Viewport.actualVisibleWorldSize model.viewport
-
-        paletteWidth =
-            toFloat widthInTiles
-
-        paletteHeight =
-            toFloat heightInTiles
 
         paletteLeft =
             -(visibleWorldSize.width / 2) + 1
 
         paletteBottom =
-            (visibleWorldSize.height / 2) - paletteHeight - 1
+            (visibleWorldSize.height / 2) - toFloat tileset.spriteRows - 1
 
         worldToCamera =
             model.viewport
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 paletteLeft paletteBottom 0
 
-
         selectionPosition =
-          tileTypes
-           |> List.Extra.findIndex (\t -> t == model.selectedTileBrushId)
-           |> Maybe.withDefault 0
-           |> indexToPalettePosition
+            tileset.tileTypes
+                |> List.Extra.findIndex (\t -> t == model.selectedTileType)
+                |> Maybe.withDefault 0
+                |> indexToPalettePosition
 
         selection =
             Svg.rect
@@ -935,34 +934,56 @@ spritesPalette tileSprites model =
                 , SA.height "1"
                 ]
                 []
+    in
+    ( tileset.tileTypes |> List.indexedMap (drawTile tileset worldToCamera)
+    , [ selection ]
+    )
 
-        drawTile : Int -> TileType -> WebGL.Entity
-        drawTile index tileType =
+
+drawTile : Tileset -> Mat4 -> Int -> TileType -> WebGL.Entity
+drawTile tileset worldToCamera index tileType =
+    let
+        -- position in the palette
+        paletteX =
+            toFloat (modBy tileset.spriteCols index)
+
+        paletteY =
+            toFloat (index // tileset.spriteCols)
+
+        entityToWorld =
+            Mat4.identity
+                |> Mat4.translate3 (paletteX + 0.5) (paletteY + 0.5) 0
+    in
+    case tileType.render of
+        Tileset.RenderEmpty ->
+            WebGL.entityWith
+                --TODO show empty or red box if blocker
+                settings
+                quadVertexShader
+                redShader
+                Svgl.Primitives.normalizedQuadMesh
+                { entityToWorld = entityToWorld
+                , worldToCamera = worldToCamera
+                , entityToTexture = Mat4.identity
+                , tileSprites = tileset.spriteTexture
+                }
+
+        Tileset.RenderStatic ( spriteLeft, spriteBottom ) ->
             let
-                -- position in the palette
-                paletteX =
-
-                    -- TODO don't use hardcoded values
-                    toFloat (modBy 8 index)
-
-                paletteY =
-                    toFloat (index // 8)
-
                 -- position in the spritesheet texture
                 tOffX =
-                    toFloat tileType.spriteLeft
+                    toFloat spriteLeft
 
                 tOffY =
-                    toFloat tileType.spriteBottom
+                    toFloat spriteBottom
+
+                scale =
+                    1 / toFloat (max tileset.spriteCols tileset.spriteRows)
 
                 entityToTexture =
                     Mat4.identity
                         |> Mat4.scale3 scale scale 1
                         |> Mat4.translate3 (tOffX + 0.5) (tOffY + 0.5) 0
-
-                entityToWorld =
-                    Mat4.identity
-                        |> Mat4.translate3 (paletteX + 0.5) (paletteY + 0.5) 0
             in
             WebGL.entityWith
                 settings
@@ -972,20 +993,16 @@ spritesPalette tileSprites model =
                 { entityToWorld = entityToWorld
                 , worldToCamera = worldToCamera
                 , entityToTexture = entityToTexture
-                , tileSprites = tileSprites
+                , tileSprites = tileset.spriteTexture
                 }
-    in
-    ( List.indexedMap drawTile typesToShow
-    , [ selection ]
-    )
 
 
 
 -- Scene ---------------------------------------------------------------------
 
 
-entities : Model -> ( List WebGL.Entity, List (Svg Msg) )
-entities model =
+entities : Tileset -> Model -> ( List WebGL.Entity, List (Svg Msg) )
+entities tileset model =
     let
         worldToCamera =
             model.viewport
@@ -994,20 +1011,15 @@ entities model =
 
         -- Tiles
         tilesEntities =
-            case model.maybeTileSprites of
-                Nothing ->
-                    []
-
-                Just tileSprites ->
-                    model.tiles
-                        |> Dict.toList
-                        |> List.sortBy (\( ( layer, tileX, tileY ), tileType ) -> layer)
-                        |> List.map (renderTile worldToCamera tileSprites)
+            model.tiles
+                |> Dict.toList
+                |> List.sortBy (\( ( layer, tileX, tileY ), tileType ) -> layer)
+                |> List.filterMap (renderMapTile worldToCamera tileset)
 
         ( paletteEntities, paletteSvg ) =
-            case ( model.maybeTileSprites, model.mode ) of
-                ( Just tileSprites, ModeTiles ) ->
-                    spritesPalette tileSprites model
+            case model.mode of
+                ModeTiles ->
+                    spritesPalette tileset model
 
                 _ ->
                     ( [], [] )
@@ -1022,28 +1034,34 @@ entities model =
     )
 
 
-renderTile : Mat4 -> Texture -> ( MapTileCoordinate, TileType ) -> WebGL.Entity
-renderTile worldToCamera tileSprites ( ( layer, tileX, tileY ), { spriteLeft, spriteBottom } ) =
-    let
-        entityToTexture =
-            Mat4.identity
-                |> Mat4.scale3 (1 / 8) (1 / 8) 1
-                |> Mat4.translate3 (toFloat spriteLeft + 0.5) (toFloat spriteBottom + 0.5) 0
+renderMapTile : Mat4 -> Tileset -> ( MapTileCoordinate, TileType ) -> Maybe WebGL.Entity
+renderMapTile worldToCamera tileset ( ( layer, tileX, tileY ), tileType ) =
+    case tileType.render of
+        Tileset.RenderEmpty ->
+            Nothing
 
-        entityToWorld =
-            Mat4.identity
-                |> Mat4.translate3 (toFloat tileX) (toFloat tileY) 0
-    in
-    WebGL.entityWith
-        settings
-        quadVertexShader
-        fragmentShader
-        Svgl.Primitives.normalizedQuadMesh
-        { entityToWorld = entityToWorld
-        , worldToCamera = worldToCamera
-        , entityToTexture = entityToTexture
-        , tileSprites = tileSprites
-        }
+        Tileset.RenderStatic ( spriteLeft, spriteBottom ) ->
+            let
+                entityToTexture =
+                    Mat4.identity
+                        |> Mat4.scale3 (1 / toFloat tileset.spriteCols) (1 / toFloat tileset.spriteCols) 1
+                        |> Mat4.translate3 (toFloat spriteLeft + 0.5) (toFloat spriteBottom + 0.5) 0
+
+                entityToWorld =
+                    Mat4.identity
+                        |> Mat4.translate3 (toFloat tileX) (toFloat tileY) 0
+            in
+            { entityToWorld = entityToWorld
+            , worldToCamera = worldToCamera
+            , entityToTexture = entityToTexture
+            , tileSprites = tileset.spriteTexture
+            }
+                |> WebGL.entityWith
+                    settings
+                    quadVertexShader
+                    fragmentShader
+                    Svgl.Primitives.normalizedQuadMesh
+                |> Just
 
 
 renderPoi : Model -> Mat4 -> ( String, Vector ) -> Svg Msg
@@ -1106,38 +1124,43 @@ renderPoi model worldToCamera ( name, point ) =
 
 view : Model -> Browser.Document Msg
 view model =
-    let
-        ( webGlEntities, svgContent ) =
-            entities model
-    in
     { title = "Generic platformer"
     , body =
-        [ Viewport.Combine.wrapper
-            { viewportSize = model.viewport.pixelSize
-            , elementAttributes =
-                [ Html.Events.Extra.Wheel.onWheel (.deltaY >> OnMouseWheel)
-                , Html.Events.onMouseDown (OnMouseButton True)
-                ]
-            , webglOptions =
-                [ WebGL.alpha True
-                , WebGL.antialias
-                , WebGL.clearColor 0.2 0.2 0.2 1
-                ]
-            , webGlEntities = webGlEntities
-            , svgContent = svgContent
-            }
-        , case model.mode of
-            ModeTiles ->
-                Html.text ""
+        case model.maybeTileset of
+            Nothing ->
+                []
 
-            ModePois ->
-                viewPoisPalette model
-        , if model.showSave then
-            viewSave model
-          else
-            Html.text ""
-        , Html.node "style" [] [ Html.text stylesheet ]
-        ]
+            Just tileset ->
+                let
+                    ( webGlEntities, svgContent ) =
+                        entities tileset model
+                in
+                [ Viewport.Combine.wrapper
+                    { viewportSize = model.viewport.pixelSize
+                    , elementAttributes =
+                        [ Html.Events.Extra.Wheel.onWheel (.deltaY >> OnMouseWheel)
+                        , Html.Events.onMouseDown (OnMouseButton True)
+                        ]
+                    , webglOptions =
+                        [ WebGL.alpha True
+                        , WebGL.antialias
+                        , WebGL.clearColor 0.2 0.2 0.2 1
+                        ]
+                    , webGlEntities = webGlEntities
+                    , svgContent = svgContent
+                    }
+                , case model.mode of
+                    ModeTiles ->
+                        Html.text ""
+
+                    ModePois ->
+                        viewPoisPalette model
+                , if model.showSave then
+                    viewSave model
+                  else
+                    Html.text ""
+                , Html.node "style" [] [ Html.text stylesheet ]
+                ]
     }
 
 

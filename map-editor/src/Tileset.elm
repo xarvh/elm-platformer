@@ -1,14 +1,12 @@
 module Tileset exposing (..)
 
-import Dict exposing (Dict)
-import Set exposing (Set)
 import WebGL.Texture exposing (Texture)
 
 
 type alias TileType =
     -- id determines where in the tileset texture the type will be stored
     { id : Int
-    , render : RenderableMode
+    , render : RenderMode
     , maybeBlocker : Maybe Blocker
     , layer : Int
     , alternativeGroupId : Int
@@ -16,9 +14,9 @@ type alias TileType =
     }
 
 
-type RenderableMode
+type RenderMode
     = RenderEmpty
-    | RenderableStatic SpriteId
+    | RenderStatic SpriteId
 
 
 {-| determines the sprite within the sprites texture
@@ -42,7 +40,8 @@ type alias ClosedSides =
 
 type alias Tileset =
     { baseFileName : String
-    , tilesById : Dict Int TileType
+    , tileTypes : List TileType
+    -- TODO should this be a maybe? or just a variable type?
     , spriteTexture : Texture
     , spriteRows : Int
     , spriteCols : Int
@@ -60,3 +59,8 @@ type alias Tileset =
 
    render : { mapTexture : Texture } -> Tileset -> { x : Float, y : Float, w : Float, h : Float } -> WebGL.Entity
 -}
+
+
+
+
+
