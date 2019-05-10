@@ -6,3 +6,4 @@
 
 * save/load
 
+* weighted alternatives

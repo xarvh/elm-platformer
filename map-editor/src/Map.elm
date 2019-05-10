@@ -18,6 +18,8 @@ import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Nbsp exposing (nbsp)
 import Pois exposing (Pois)
+import Random
+import Random.Extra
 import Set exposing (Set)
 import Svg exposing (Svg)
 import Svg.Attributes as SA
@@ -54,6 +56,8 @@ type alias Model =
     , newKeys : List Keyboard.Key
     , oldKeys : List Keyboard.Key
     , patternMode : Bool
+    , alternativeMode : Bool
+    , seed : Random.Seed
 
     -- Editor meta
     , cameraPosition : Vector
@@ -165,7 +169,9 @@ init map flags =
             , newKeys = []
             , oldKeys = []
             , maybeTileset = Nothing
-            , patternMode = False
+            , patternMode = True
+            , alternativeMode = True
+            , seed = Random.initialSeed 0
 
             -- Editor meta
             , cameraPosition =
@@ -387,6 +393,9 @@ updateOnKeyChange maybeKeyChange model =
                         ( ModeTiles, Keyboard.Character "p" ) ->
                             { model | patternMode = not model.patternMode }
 
+                        ( ModeTiles, Keyboard.Character "l" ) ->
+                            { model | alternativeMode = not model.alternativeMode }
+
                         -- Mode: Pois
                         ( ModePois, Keyboard.Character "a" ) ->
                             model |> addPoi
@@ -585,7 +594,7 @@ replaceTile model =
         position =
             model.mouseWorldPosition
 
-        tileType =
+        tileType1 =
             case ( model.patternMode, model.selectedTileType.maybePatternFragment ) of
                 ( True, Just fragment ) ->
                     findTileThatMatchesPattern fragment.patternId model
@@ -593,10 +602,37 @@ replaceTile model =
                 _ ->
                     model.selectedTileType
 
+        ( tileType2, model2 ) =
+            if model.alternativeMode && model.selectedTileType.alternativeGroupId /= 0 then
+                pickRandomAlternative tileType1 model
+            else
+                ( tileType1, model )
+
         tiles =
-            Dict.insert ( model.selectedTileType.layer, round position.x, round position.y ) tileType model.tiles
+            Dict.insert ( model.selectedTileType.layer, round position.x, round position.y ) tileType2 model.tiles
     in
-    { model | tiles = tiles }
+    { model2 | tiles = tiles }
+
+
+pickRandomAlternative : TileType -> Model -> ( TileType, Model )
+pickRandomAlternative tileType model =
+    case model.maybeTileset of
+        Nothing ->
+            ( tileType, model )
+
+        Just tileset ->
+            let
+                alternatives =
+                    tileset.tileTypes
+                        |> List.filter (\t -> t.alternativeGroupId == model.selectedTileType.alternativeGroupId)
+
+                ( maybeAlt, seed ) =
+                    Random.step (Random.Extra.sample alternatives) model.seed
+
+                alt =
+                    Maybe.withDefault tileType maybeAlt
+            in
+            ( alt, { model | seed = seed } )
 
 
 findTileThatMatchesPattern : Int -> Model -> TileType
