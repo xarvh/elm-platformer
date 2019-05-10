@@ -53,6 +53,7 @@ type alias Model =
     , mouseButtonIsDown : Bool
     , newKeys : List Keyboard.Key
     , oldKeys : List Keyboard.Key
+    , patternMode : Bool
 
     -- Editor meta
     , cameraPosition : Vector
@@ -152,7 +153,7 @@ init map flags =
             , maybeBlocker = Just Tileset.BlockerFourSides
             , layer = 0
             , alternativeGroupId = 0
-            , maybePattern = Nothing
+            , maybePatternFragment = Nothing
             }
 
         model =
@@ -164,6 +165,7 @@ init map flags =
             , newKeys = []
             , oldKeys = []
             , maybeTileset = Nothing
+            , patternMode = False
 
             -- Editor meta
             , cameraPosition =
@@ -382,6 +384,9 @@ updateOnKeyChange maybeKeyChange model =
                         ( ModeTiles, Keyboard.Character "d" ) ->
                             model |> moveTileBrushSelection 1 0
 
+                        ( ModeTiles, Keyboard.Character "p" ) ->
+                            { model | patternMode = not model.patternMode }
+
                         -- Mode: Pois
                         ( ModePois, Keyboard.Character "a" ) ->
                             model |> addPoi
@@ -568,7 +573,7 @@ moveTileBrushSelection dl db model =
                             , maybeBlocker = Just Tileset.BlockerFourSides
                             , layer = 0
                             , alternativeGroupId = 0
-                            , maybePattern = Nothing
+                            , maybePatternFragment = Nothing
                             }
             in
             { model | selectedTileType = tileType }
@@ -580,16 +585,61 @@ replaceTile model =
         position =
             model.mouseWorldPosition
 
-        row =
-            round position.y
+        tileType =
+            case ( model.patternMode, model.selectedTileType.maybePatternFragment ) of
+                ( True, Just fragment ) ->
+                    findTileThatMatchesPattern fragment.patternId model
 
-        column =
-            round position.x
+                _ ->
+                    model.selectedTileType
 
         tiles =
-            Dict.insert ( model.selectedTileType.layer, round position.x, round position.y ) model.selectedTileType model.tiles
+            Dict.insert ( model.selectedTileType.layer, round position.x, round position.y ) tileType model.tiles
     in
     { model | tiles = tiles }
+
+
+findTileThatMatchesPattern : Int -> Model -> TileType
+findTileThatMatchesPattern patternId model =
+    case model.maybeTileset of
+        Nothing ->
+            model.selectedTileType
+
+        Just tileset ->
+            let
+                col =
+                    round model.mouseWorldPosition.x
+
+                row =
+                    round model.mouseWorldPosition.y
+
+                hasPattern dc dr =
+                    case Dict.get ( model.selectedTileType.layer, col + dc, row + dr ) model.tiles of
+                        Nothing ->
+                            False
+
+                        Just tileType ->
+                            case tileType.maybePatternFragment of
+                                Nothing ->
+                                    False
+
+                                Just fragment ->
+                                    fragment.patternId == patternId
+
+                requiredFragment =
+                    { patternId = patternId
+                    , left = hasPattern -1 0
+                    , right = hasPattern 1 0
+                    , up = hasPattern 0 1
+                    , down = hasPattern 0 -1
+                    }
+
+                matchesRequiredClosedSides tileType =
+                    tileType.maybePatternFragment == Just requiredFragment
+            in
+            tileset.tileTypes
+                |> List.Extra.find matchesRequiredClosedSides
+                |> Maybe.withDefault model.selectedTileType
 
 
 

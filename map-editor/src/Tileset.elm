@@ -10,7 +10,7 @@ type alias TileType =
     , maybeBlocker : Maybe Blocker
     , layer : Int
     , alternativeGroupId : Int
-    , maybePattern : Maybe { patternId : Int, closedSides : ClosedSides }
+    , maybePatternFragment : Maybe PatternFragment
     }
 
 
@@ -30,8 +30,9 @@ type Blocker
     | BlockerOneWayPlatform
 
 
-type alias ClosedSides =
-    { left : Bool
+type alias PatternFragment =
+    { patternId : Int
+    , left : Bool
     , right : Bool
     , up : Bool
     , down : Bool
