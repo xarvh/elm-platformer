@@ -34,6 +34,9 @@ textureToTileset name spriteTexture =
         fourSides =
             Just Tileset.BlockerFourSides
 
+        platform =
+            Just Tileset.BlockerOneWayPlatform
+
         static =
             Tileset.RenderStatic
 
@@ -104,5 +107,12 @@ textureToTileset name spriteTexture =
         ---
         , { id = 23, render = static ( 6, 0 ), maybeBlocker = none, layer = 0, alternativeGroupId = 1, maybePatternFragment = Nothing }
         , { id = 24, render = static ( 7, 0 ), maybeBlocker = none, layer = 0, alternativeGroupId = 1, maybePatternFragment = Nothing }
+
+        -- door
+        , { id = 25, render = static ( 7, 5 ), maybeBlocker = none, layer = 0, alternativeGroupId = 0, maybePatternFragment = Just { patternId = 1, left = False, right = False, up = False, down = True } }
+        , { id = 26, render = static ( 7, 4 ), maybeBlocker = none, layer = 0, alternativeGroupId = 0, maybePatternFragment = Just { patternId = 1, left = False, right = False, up = True, down = False } }
+
+        -- platform
+        , { id = 27, render = static ( 4, 3 ), maybeBlocker = platform, layer = 1, alternativeGroupId = 0, maybePatternFragment = Nothing }
         ]
     }
