@@ -45,7 +45,8 @@ type Mode
 
 
 type alias Model =
-    { viewport : Viewport
+    { viewportPixelSize : Viewport.PixelSize
+    , minimumVisibleWorldSize : Float
     , maybeTileset : Maybe Tileset
     , mousePixelPosition : Viewport.PixelPosition
     , mouseWorldPosition : Vector
@@ -155,11 +156,8 @@ init map flags =
             }
 
         model =
-            { viewport =
-                makeViewport
-                    { width = 640
-                    , height = 480
-                    }
+            { viewportPixelSize = { width = 640, height = 480 }
+            , minimumVisibleWorldSize = 20
             , mousePixelPosition = { top = 0, left = 0 }
             , mouseWorldPosition = Vector.origin
             , mouseButtonIsDown = False
@@ -199,10 +197,10 @@ init map flags =
 -- update
 
 
-makeViewport : Viewport.PixelSize -> Viewport
-makeViewport pixelSize =
-    { pixelSize = pixelSize
-    , minimumVisibleWorldSize = { width = 20, height = 20 }
+viewport : Model -> Viewport
+viewport model =
+    { pixelSize = model.viewportPixelSize
+    , minimumVisibleWorldSize = { width = model.minimumVisibleWorldSize, height = model.minimumVisibleWorldSize }
     }
 
 
@@ -213,7 +211,7 @@ update msg model =
             noCmd model
 
         OnResize size ->
-            { model | viewport = makeViewport size }
+            { model | viewportPixelSize = size }
                 |> noCmd
 
         OnKey keymsg ->
@@ -230,9 +228,7 @@ update msg model =
         OnMouseMove pixelPosition ->
             let
                 worldPosition =
-                    Viewport.pixelToWorld
-                        model.viewport
-                        pixelPosition
+                    Viewport.pixelToWorld (viewport model) pixelPosition
                         |> Vector.add model.cameraPosition
             in
             { model
@@ -244,8 +240,18 @@ update msg model =
                 |> noCmd
 
         OnMouseWheel deltaY ->
-            -- TODO zoom
-            noCmd model
+            let
+                speed =
+                    1.2
+
+                f =
+                    if deltaY > 0 then
+                        speed
+                    else
+                        1 / speed
+            in
+            { model | minimumVisibleWorldSize = f * model.minimumVisibleWorldSize }
+                |> noCmd
 
         OnMouseButton isDown ->
             { model | mouseButtonIsDown = isDown }
@@ -826,7 +832,7 @@ spritesPalette tileset model =
             }
 
         visibleWorldSize =
-            Viewport.actualVisibleWorldSize model.viewport
+            Viewport.actualVisibleWorldSize (viewport model)
 
         paletteLeft =
             -(visibleWorldSize.width / 2) + 1
@@ -835,7 +841,8 @@ spritesPalette tileset model =
             (visibleWorldSize.height / 2) - toFloat tileset.spriteRows - 1
 
         worldToCamera =
-            model.viewport
+            model
+                |> viewport
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 paletteLeft paletteBottom 0
 
@@ -946,7 +953,8 @@ entities : Tileset -> Model -> ( List WebGL.Entity, List (Svg Msg) )
 entities tileset model =
     let
         worldToCamera =
-            model.viewport
+            model
+                |> viewport
                 |> Viewport.worldToCameraTransform
                 |> Mat4.translate3 -model.cameraPosition.x -model.cameraPosition.y 0
 
@@ -1077,7 +1085,7 @@ view model =
                         entities tileset model
                 in
                 [ Viewport.Combine.wrapper
-                    { viewportSize = model.viewport.pixelSize
+                    { viewportSize = model.viewportPixelSize
                     , elementAttributes =
                         [ Html.Events.Extra.Wheel.onWheel (.deltaY >> OnMouseWheel)
                         , Html.Events.onMouseDown (OnMouseButton True)
