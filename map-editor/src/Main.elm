@@ -1,4 +1,4 @@
-module Map exposing (define, prog)
+module Main exposing (..)
 
 import Browser
 import Browser.Dom
@@ -18,6 +18,7 @@ import Math.Vector3 as Vec3 exposing (Vec3, vec3)
 import Math.Vector4 as Vec4 exposing (Vec4, vec4)
 import Nbsp exposing (nbsp)
 import Pois exposing (Pois)
+import Ports
 import Random
 import Random.Extra
 import Set exposing (Set)
@@ -36,6 +37,9 @@ import WebGL exposing (Shader)
 import WebGL.Settings exposing (Setting)
 import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
+
+
+
 
 
 -- types
@@ -131,8 +135,8 @@ ifThenElse condition then_ else_ =
 --
 
 
-init : map -> {} -> ( Model, Cmd Msg )
-init map flags =
+init : { localStorageMap : String, dateNow : Int } -> ( Model, Cmd Msg )
+init flags =
     let
         tiles =
             --TODO
@@ -172,7 +176,7 @@ init map flags =
             , maybeTileset = Nothing
             , patternMode = True
             , alternativeMode = True
-            , seed = Random.initialSeed 0
+            , seed = Random.initialSeed flags.dateNow
 
             -- Editor meta
             , cameraPosition =
@@ -194,6 +198,11 @@ init map flags =
             , tiles = tiles
             }
 
+        -- TODO tese are here because otherwise Elm will not populate app.ports
+        elmgetyourshittogether =
+                [ Ports.saveAs { name = "lol.json", mime = "text/json", content = "{}" }
+                , Ports.saveMap "ze map"
+                ]
         cmd =
             Cmd.batch
                 [ Viewport.getWindowSize OnResize
@@ -1039,6 +1048,7 @@ drawTileOverlay model tileset worldToCamera index tileType =
         , strokeDasharray
         , SA.width "1"
         , SA.height "1"
+
         --TODO how do I avoid inserting a tile when I click on a tile type? --, Html.Events.onClick
         ]
         []
@@ -1353,16 +1363,12 @@ subscriptions model =
 -- Main
 
 
-define =
-    identity
-
-
-prog map =
+main =
     Browser.document
         { view = view
         , subscriptions = subscriptions
         , update = update
-        , init = init map
+        , init = init
         }
 
 

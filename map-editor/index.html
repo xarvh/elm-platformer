@@ -1,0 +1,37 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <meta charset="UTF-8">
+
+        <script type="text/javascript" src="build/app.js"></script>
+    </head>
+    <body>
+        <div id='main'></div>
+        <script type="text/javascript">
+
+
+            var elmApp = Elm.Main.init({
+              node: document.getElementById('main'),
+              flags: {
+                localStorageMap: localStorage.map || "",
+                dateNow: Date.now(),
+              }
+            });
+
+
+            elmApp.ports.saveAs.subscribe(function saveAs({ name, mime, content }) {
+              var a = document.getElementById('a');
+              var blob = new Blob([ content ], { type: mime });
+              a.href = URL.createObjectURL(blob);
+              a.download = name;
+            });
+
+
+            elmApp.ports.saveMap.subscribe(function saveMap(map) {
+              localStorage.map = map;
+            });
+
+
+        </script>
+    </body>
+</html>
