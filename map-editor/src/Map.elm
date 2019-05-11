@@ -976,33 +976,72 @@ spritesPalette tileset model =
                 , strokeWidth = 0
                 , opacity = 0.5
                 }
-
-        selectionPosition =
-            tileset.tileTypes
-                |> List.Extra.findIndex (\t -> t == model.selectedTileType)
-                |> Maybe.withDefault 0
-                |> indexToPalettePosition
-
-        selection =
-            Svg.rect
-                [ worldToCamera
-                    |> Mat4.translate3 selectionPosition.x selectionPosition.y 0
-                    |> Viewport.Combine.transform
-                , SA.fill "none"
-                , SA.stroke "red"
-                , SA.strokeWidth "0.1"
-                , SA.x "0"
-                , SA.y "0"
-                , SA.width "1"
-                , SA.height "1"
-                ]
-                []
     in
     ( tileset.tileTypes
         |> List.indexedMap (drawTile tileset worldToCamera)
         |> (::) background
-    , [ selection ]
+    , tileset.tileTypes
+        |> List.indexedMap (drawTileOverlay model tileset worldToCamera)
     )
+
+
+drawTileOverlay : Model -> Tileset -> Mat4 -> Int -> TileType -> Svg Msg
+drawTileOverlay model tileset worldToCamera index tileType =
+    let
+        selectedType =
+            model.selectedTileType
+
+        -- position in the palette
+        paletteX =
+            toFloat (modBy tileset.spriteCols index)
+
+        paletteY =
+            toFloat (index // tileset.spriteCols)
+
+        entityToCamera =
+            worldToCamera
+                |> Mat4.translate3 paletteX paletteY 0
+
+        isPatternSelected =
+            Maybe.map2 (\frag selectedFrag -> frag.patternId == selectedFrag.patternId)
+                tileType.maybePatternFragment
+                selectedType.maybePatternFragment
+                |> Maybe.withDefault False
+
+        isAlternativeSelected =
+            model.alternativeMode
+                && (tileType.alternativeGroupId /= 0)
+                && (tileType.alternativeGroupId == selectedType.alternativeGroupId)
+
+        strokeColor =
+            if tileType == selectedType || isAlternativeSelected then
+                "red"
+            else
+                "none"
+
+        strokeDasharray =
+            if isAlternativeSelected then
+                SA.strokeDasharray "0.2 0.2"
+            else
+                SA.style ""
+
+        fillColor =
+            if isPatternSelected && model.patternMode then
+                "rgba(255, 0, 0, 0.3)"
+            else
+                "none"
+    in
+    Svg.rect
+        [ Viewport.Combine.transform entityToCamera
+        , SA.fill fillColor
+        , SA.stroke strokeColor
+        , SA.strokeWidth "0.1"
+        , strokeDasharray
+        , SA.width "1"
+        , SA.height "1"
+        --TODO how do I avoid inserting a tile when I click on a tile type? --, Html.Events.onClick
+        ]
+        []
 
 
 drawTile : Tileset -> Mat4 -> Int -> TileType -> WebGL.Entity

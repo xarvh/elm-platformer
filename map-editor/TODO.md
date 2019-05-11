@@ -1,5 +1,3 @@
-* click to select tile type
-
 * save/load
 
 
