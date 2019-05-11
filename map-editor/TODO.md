@@ -1,7 +1,5 @@
 * click to select tile type
 
-* quick switch to delete
-
 * save/load
 
 

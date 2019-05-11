@@ -55,14 +55,15 @@ type alias Model =
     , mouseButtonIsDown : Bool
     , newKeys : List Keyboard.Key
     , oldKeys : List Keyboard.Key
-    , patternMode : Bool
-    , alternativeMode : Bool
     , seed : Random.Seed
 
     -- Editor meta
+    , mode : Mode
+    , patternMode : Bool
+    , alternativeMode : Bool
     , cameraPosition : Vector
     , selectedTileType : TileType
-    , mode : Mode
+    , previousSelectedTileType : TileType
     , undoHistory : List MapState
     , redoHistory : List MapState
     , hoveredPoi : String
@@ -179,6 +180,7 @@ init map flags =
                 , y = 0.5 * toFloat (maxY + minY)
                 }
             , selectedTileType = placeholderTileType
+            , previousSelectedTileType = placeholderTileType
             , mode = ModeTiles
             , showSave = False
             , undoHistory = []
@@ -393,7 +395,10 @@ updateOnKeyChange maybeKeyChange model =
                         ( ModeTiles, Keyboard.Character "p" ) ->
                             { model | patternMode = not model.patternMode }
 
-                        ( ModeTiles, Keyboard.Character "l" ) ->
+                        ( ModeTiles, Keyboard.Character "D" ) ->
+                            toggleDelete model
+
+                        ( ModeTiles, Keyboard.Character "A" ) ->
                             { model | alternativeMode = not model.alternativeMode }
 
                         -- Mode: Pois
@@ -408,6 +413,32 @@ updateOnKeyChange maybeKeyChange model =
 
             _ ->
                 model
+
+
+toggleDelete : Model -> Model
+toggleDelete model =
+    if model.selectedTileType.render == Tileset.RenderEmpty then
+        { model | selectedTileType = model.previousSelectedTileType }
+    else
+        let
+            isEmpty tileType =
+                (tileType.render == Tileset.RenderEmpty)
+                    && (tileType.maybeBlocker == Nothing)
+                    && (tileType.layer == model.selectedTileType.layer)
+
+            maybeEmptyTile =
+                model.maybeTileset
+                    |> Maybe.andThen (\tileset -> List.Extra.find isEmpty tileset.tileTypes)
+        in
+        case maybeEmptyTile of
+            Nothing ->
+                model
+
+            Just empty ->
+                { model
+                    | selectedTileType = empty
+                    , previousSelectedTileType = model.selectedTileType
+                }
 
 
 updatePan : Int -> Int -> Model -> Model
