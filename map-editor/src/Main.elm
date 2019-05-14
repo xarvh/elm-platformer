@@ -196,6 +196,15 @@ encodeMap { tiles, pois } =
         ]
 
 
+encodeMapFromModel : Model -> String
+encodeMapFromModel model =
+    { tiles = model.tiles |> Dict.filter (\id tt -> Tileset.actuallyDoesSomething tt)
+    , pois = model.pois
+    }
+        |> encodeMap
+        |> Json.Encode.encode 0
+
+
 encodeTileTuple : ( MapTileCoordinate, TileType ) -> Json.Encode.Value
 encodeTileTuple ( ( x, y, layer ), tt ) =
     Json.Encode.list Json.Encode.int [ x, y, layer, tt.id ]
@@ -236,7 +245,7 @@ init flags =
         placeholderTileType =
             { id = -1
             , render = Tileset.RenderEmpty
-            , maybeBlocker = Just Tileset.BlockerFourSides
+            , maybeBlocker = Nothing
             , layer = 0
             , alternativeGroupId = 0
             , maybePatternFragment = Nothing
@@ -301,104 +310,105 @@ viewport model =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Noop ->
-            noCmd model
-
-        OnResize size ->
-            { model | viewportPixelSize = size }
-                |> noCmd
-
-        OnKey keymsg ->
-            let
-                ( keys, maybeKeyChange ) =
-                    Keyboard.updateWithKeyChange Keyboard.anyKey keymsg model.newKeys
-            in
-            { model
-                | newKeys = keys
-                , oldKeys = model.newKeys
-            }
-                |> updateOnKeyChange maybeKeyChange
-
-        OnMouseMove pixelPosition ->
-            let
-                worldPosition =
-                    Viewport.pixelToWorld (viewport model) pixelPosition
-                        |> Vector.add model.cameraPosition
-            in
-            { model
-                | mousePixelPosition = pixelPosition
-                , mouseWorldPosition = worldPosition
-            }
-                -- NOTE no pushing!
-                |> ifThenElse (model.mouseButtonIsDown && model.mode == ModeTiles) replaceTile identity
-                |> noCmd
-
-        OnMouseWheel deltaY ->
-            let
-                speed =
-                    1.2
-
-                f =
-                    if deltaY > 0 then
-                        speed
-                    else
-                        1 / speed
-            in
-            { model | minimumVisibleWorldSize = f * model.minimumVisibleWorldSize }
-                |> noCmd
-
-        OnMouseButton isDown ->
-            { model | mouseButtonIsDown = isDown }
-                |> (case model.mode of
-                        ModeTiles ->
-                            ifThenElse isDown (pushUndoSnapshotFrom model >> replaceTile) identity
-
-                        ModePois ->
-                            if isDown && model.selectedPoi /= "" then
-                                pushUndoSnapshotFrom model >> poiToMouse model.selectedPoi
-                            else
-                                identity
-                   )
-                |> noCmd
-
-        OnMouseEnterPoi name ->
-            noCmd { model | hoveredPoi = name }
-
-        OnMouseLeavePoi name ->
-            noCmd <|
-                if model.hoveredPoi == name then
-                    { model | hoveredPoi = "" }
-                else
-                    model
-
-        OnMouseClickPoi name ->
-            if model.mode /= ModePois then
+    maybeSaveMapToLocalStorage model <|
+        case msg of
+            Noop ->
                 noCmd model
-            else if model.selectedPoi == name then
-                ( { model | renamingPoi = Just ( name, name ) }
-                , Task.attempt (always Noop) (Browser.Dom.focus name)
-                )
-            else
-                noCmd { model | selectedPoi = name }
 
-        OnRenamePoiInput s ->
-            noCmd <|
-                { model | renamingPoi = Maybe.map (always s |> Tuple.mapSecond) model.renamingPoi }
+            OnResize size ->
+                { model | viewportPixelSize = size }
+                    |> noCmd
 
-        OnClickTileBrush id ->
-            noCmd <|
-                { model | selectedTileType = id }
+            OnKey keymsg ->
+                let
+                    ( keys, maybeKeyChange ) =
+                        Keyboard.updateWithKeyChange Keyboard.anyKey keymsg model.newKeys
+                in
+                { model
+                    | newKeys = keys
+                    , oldKeys = model.newKeys
+                }
+                    |> updateOnKeyChange maybeKeyChange
 
-        OnTilesetLoad result ->
-            case result of
-                Err err ->
-                    Debug.todo err
+            OnMouseMove pixelPosition ->
+                let
+                    worldPosition =
+                        Viewport.pixelToWorld (viewport model) pixelPosition
+                            |> Vector.add model.cameraPosition
+                in
+                { model
+                    | mousePixelPosition = pixelPosition
+                    , mouseWorldPosition = worldPosition
+                }
+                    -- NOTE no pushing!
+                    |> ifThenElse (model.mouseButtonIsDown && model.mode == ModeTiles) replaceTile identity
+                    |> noCmd
 
-                Ok tileset ->
-                    { model | maybeTileset = Just tileset }
-                        |> loadMap tileset model.flags.localStorageMap
-                        |> noCmd
+            OnMouseWheel deltaY ->
+                let
+                    speed =
+                        1.2
+
+                    f =
+                        if deltaY > 0 then
+                            speed
+                        else
+                            1 / speed
+                in
+                { model | minimumVisibleWorldSize = f * model.minimumVisibleWorldSize }
+                    |> noCmd
+
+            OnMouseButton isDown ->
+                { model | mouseButtonIsDown = isDown }
+                    |> (case model.mode of
+                            ModeTiles ->
+                                ifThenElse isDown (pushUndoSnapshotFrom model >> replaceTile) identity
+
+                            ModePois ->
+                                if isDown && model.selectedPoi /= "" then
+                                    pushUndoSnapshotFrom model >> poiToMouse model.selectedPoi
+                                else
+                                    identity
+                       )
+                    |> noCmd
+
+            OnMouseEnterPoi name ->
+                noCmd { model | hoveredPoi = name }
+
+            OnMouseLeavePoi name ->
+                noCmd <|
+                    if model.hoveredPoi == name then
+                        { model | hoveredPoi = "" }
+                    else
+                        model
+
+            OnMouseClickPoi name ->
+                if model.mode /= ModePois then
+                    noCmd model
+                else if model.selectedPoi == name then
+                    ( { model | renamingPoi = Just ( name, name ) }
+                    , Task.attempt (always Noop) (Browser.Dom.focus name)
+                    )
+                else
+                    noCmd { model | selectedPoi = name }
+
+            OnRenamePoiInput s ->
+                noCmd <|
+                    { model | renamingPoi = Maybe.map (always s |> Tuple.mapSecond) model.renamingPoi }
+
+            OnClickTileBrush id ->
+                noCmd <|
+                    { model | selectedTileType = id }
+
+            OnTilesetLoad result ->
+                case result of
+                    Err err ->
+                        Debug.todo err
+
+                    Ok tileset ->
+                        { model | maybeTileset = Just tileset }
+                            |> loadMap tileset model.flags.localStorageMap
+                            |> noCmd
 
 
 loadMap : Tileset -> String -> Model -> Model
@@ -430,6 +440,21 @@ loadMap tileset mapAsString model =
             , y = 0.5 * toFloat (maxY + minY)
             }
     }
+
+
+maybeSaveMapToLocalStorage : Model -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+maybeSaveMapToLocalStorage oldModel ( newModel, cmd ) =
+    ( newModel
+    , if oldModel.pois == newModel.pois && oldModel.tiles == newModel.tiles then
+        cmd
+      else
+        Cmd.batch
+            [ cmd
+            , newModel
+                |> encodeMapFromModel
+                |> Ports.saveMap
+            ]
+    )
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )

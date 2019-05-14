@@ -42,11 +42,17 @@ type alias PatternFragment =
 type alias Tileset =
     { baseFileName : String
     , tileTypes : List TileType
+
     -- TODO should this be a maybe? or just a variable type?
     , spriteTexture : Texture
     , spriteRows : Int
     , spriteCols : Int
     }
+
+
+actuallyDoesSomething : TileType -> Bool
+actuallyDoesSomething tt =
+    tt.maybeBlocker /= Nothing || tt.render /= RenderEmpty
 
 
 
@@ -60,8 +66,3 @@ type alias Tileset =
 
    render : { mapTexture : Texture } -> Tileset -> { x : Float, y : Float, w : Float, h : Float } -> WebGL.Entity
 -}
-
-
-
-
-
