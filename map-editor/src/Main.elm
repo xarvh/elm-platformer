@@ -10,6 +10,7 @@ import Html.Attributes exposing (class, classList)
 import Html.Events
 import Html.Events.Extra.Wheel
 import Json.Decode exposing (Decoder)
+import Json.Encode
 import Keyboard
 import List.Extra
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -39,9 +40,6 @@ import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
 
 
-
-
-
 -- types
 
 
@@ -50,8 +48,15 @@ type Mode
     | ModePois
 
 
+type alias Flags =
+    { localStorageMap : String
+    , dateNow : Int
+    }
+
+
 type alias Model =
     { viewportPixelSize : Viewport.PixelSize
+    , flags : Flags
     , minimumVisibleWorldSize : Float
     , maybeTileset : Maybe Tileset
     , mousePixelPosition : Viewport.PixelPosition
@@ -115,6 +120,96 @@ type alias MapBoundaries =
 
 
 
+-- Decoders / Encoders
+
+
+mapDecoder : Tileset -> Decoder MapState
+mapDecoder tileset =
+    Json.Decode.map2 MapState
+        (Json.Decode.field "tiles" (tilesDecoder tileset))
+        (Json.Decode.field "pois" (Json.Decode.dict vectorDecoder))
+
+
+tilesDecoder : Tileset -> Decoder (Dict MapTileCoordinate TileType)
+tilesDecoder tileset =
+    tileset
+        |> tileTupleDecoder
+        |> Json.Decode.list
+        |> Json.Decode.map Dict.fromList
+
+
+tileTupleDecoder : Tileset -> Decoder ( MapTileCoordinate, TileType )
+tileTupleDecoder tileset =
+    Json.Decode.int
+        |> Json.Decode.list
+        |> Json.Decode.andThen (listToTuple >> maybeToDecoder "expecting exactly 4 integers")
+        |> Json.Decode.andThen (tupleIdToTileType tileset)
+
+
+tupleIdToTileType : Tileset -> ( MapTileCoordinate, Int ) -> Decoder ( MapTileCoordinate, TileType )
+tupleIdToTileType tileset ( coords, id ) =
+    tileset.tileTypes
+        |> List.Extra.find (\t -> t.id == id)
+        |> maybeToDecoder "given id is not in tileset"
+        |> Json.Decode.map (Tuple.pair coords)
+
+
+listToTuple : List Int -> Maybe ( MapTileCoordinate, Int )
+listToTuple list =
+    case list of
+        x :: y :: layer :: id :: [] ->
+            Just ( ( x, y, layer ), id )
+
+        _ ->
+            Nothing
+
+
+maybeToDecoder : String -> Maybe a -> Decoder a
+maybeToDecoder error maybe =
+    case maybe of
+        Nothing ->
+            Json.Decode.fail error
+
+        Just a ->
+            Json.Decode.succeed a
+
+
+vectorDecoder : Decoder Vector
+vectorDecoder =
+    Json.Decode.map2 Vector
+        (Json.Decode.field "x" Json.Decode.float)
+        (Json.Decode.field "y" Json.Decode.float)
+
+
+encodeMap : MapState -> Json.Encode.Value
+encodeMap { tiles, pois } =
+    Json.Encode.object
+        [ ( "tiles"
+          , tiles
+                |> Dict.toList
+                |> Json.Encode.list encodeTileTuple
+          )
+        , ( "pois"
+          , pois
+                |> Json.Encode.dict identity encodeVector
+          )
+        ]
+
+
+encodeTileTuple : ( MapTileCoordinate, TileType ) -> Json.Encode.Value
+encodeTileTuple ( ( x, y, layer ), tt ) =
+    Json.Encode.list Json.Encode.int [ x, y, layer, tt.id ]
+
+
+encodeVector : Vector -> Json.Encode.Value
+encodeVector v =
+    Json.Encode.object
+        [ ( "x", Json.Encode.float v.x )
+        , ( "y", Json.Encode.float v.y )
+        ]
+
+
+
 --
 
 
@@ -135,27 +230,9 @@ ifThenElse condition then_ else_ =
 --
 
 
-init : { localStorageMap : String, dateNow : Int } -> ( Model, Cmd Msg )
+init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
-        tiles =
-            --TODO
-            Dict.empty
-
-        pois =
-            Dict.empty
-
-        {-
-           case Pois.parse (Debug.toString map.pois) of
-               Ok p ->
-                   p
-
-               Err err ->
-                   Debug.todo (Debug.toString err)
-        -}
-        { minX, maxX, minY, maxY } =
-            mapBoundaries tiles
-
         placeholderTileType =
             { id = -1
             , render = Tileset.RenderEmpty
@@ -167,6 +244,7 @@ init flags =
 
         model =
             { viewportPixelSize = { width = 640, height = 480 }
+            , flags = flags
             , minimumVisibleWorldSize = 20
             , mousePixelPosition = { top = 0, left = 0 }
             , mouseWorldPosition = Vector.origin
@@ -179,10 +257,7 @@ init flags =
             , seed = Random.initialSeed flags.dateNow
 
             -- Editor meta
-            , cameraPosition =
-                { x = 0.5 * toFloat (maxX + minX)
-                , y = 0.5 * toFloat (maxY + minY)
-                }
+            , cameraPosition = { x = 0, y = 0 }
             , selectedTileType = placeholderTileType
             , previousSelectedTileType = placeholderTileType
             , mode = ModeTiles
@@ -194,15 +269,16 @@ init flags =
             , renamingPoi = Nothing
 
             -- Map State
-            , pois = pois
-            , tiles = tiles
+            , pois = Dict.empty
+            , tiles = Dict.empty
             }
 
         -- TODO tese are here because otherwise Elm will not populate app.ports
         elmgetyourshittogether =
-                [ Ports.saveAs { name = "lol.json", mime = "text/json", content = "{}" }
-                , Ports.saveMap "ze map"
-                ]
+            [ Ports.saveAs { name = "lol.json", mime = "text/json", content = "{}" }
+            , Ports.saveMap "ze map"
+            ]
+
         cmd =
             Cmd.batch
                 [ Viewport.getWindowSize OnResize
@@ -320,7 +396,40 @@ update msg model =
                     Debug.todo err
 
                 Ok tileset ->
-                    noCmd { model | maybeTileset = Just tileset }
+                    { model | maybeTileset = Just tileset }
+                        |> loadMap tileset model.flags.localStorageMap
+                        |> noCmd
+
+
+loadMap : Tileset -> String -> Model -> Model
+loadMap tileset mapAsString model =
+    let
+        { tiles, pois } =
+            case Json.Decode.decodeString (mapDecoder tileset) mapAsString of
+                Ok stuff ->
+                    stuff
+
+                Err error ->
+                    let
+                        _ =
+                            Debug.log "no map" error
+                    in
+                    { tiles = Dict.empty
+                    , pois = Dict.empty
+                    }
+
+        { minX, maxX, minY, maxY } =
+            mapBoundaries tiles
+                |> Debug.log "bounds"
+    in
+    { model
+        | tiles = tiles
+        , pois = pois
+        , cameraPosition =
+            { x = 0.5 * toFloat (maxX + minX)
+            , y = 0.5 * toFloat (maxY + minY)
+            }
+    }
 
 
 updateOnKeyChange : Maybe Keyboard.KeyChange -> Model -> ( Model, Cmd Msg )
