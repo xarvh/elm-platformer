@@ -68,6 +68,24 @@ type Enjoyment
     | Unenjoyable
 
 
+enjoymentToFloat : Enjoyment -> Float
+enjoymentToFloat enjoyment =
+    case enjoyment of
+        Enjoyable ->
+            1
+
+        Meh ->
+            0
+
+        Unenjoyable ->
+            -1
+
+
+enjoymentBias : Process -> Enjoyment -> Float
+enjoymentBias process enjoyment =
+    0.6 * enjoymentToFloat enjoymentToFloat + 0.4 * enjoymentToFloat process.enjoymentBias
+
+
 type Effort
     = Intense
     | Light
@@ -78,18 +96,31 @@ type Effort
 --
 
 
-resourcePriority : Person -> Item -> Float
-resourcePriority character resource =
+productEquality : Product -> Product -> Bool
+productEquality a b =
+    case ( a, b ) of
+        ( Satisfy _ aNeed, Satisfy _ bNeed ) ->
+            aNeed == bNeed
+
+        ( Produce _ aItem, Produce _ bItem ) ->
+            aItem == bItem
+
+        _ ->
+            a == b
+
+
+productPriority : Person -> Product -> Float
+productPriority character resource =
     character.knownProcesses
-        |> List.filter (\{ enjoyment, process } -> processOutputs resource process)
-        |> List.map (\{ enjoyment, process } -> enjoyment * processPriority character process)
+        |> List.filter (\{ enjoyment, process } -> List.any (productEquality resource) process.products)
+        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority character process)
         |> List.sum
 
 
 processPriority : Person -> Process -> Float
 processPriority character process =
     process.requirements
-        |> List.map (\{ qty, resource } -> qty * resourcePriority character resource)
+        |> List.map (\{ qty, resource } -> qty * productPriority character resource)
         |> List.sum
 
 
@@ -99,7 +130,7 @@ processPriority character process =
 
 eatable : Int -> Item -> Process
 eatable satisfaction item =
-    { name = "Eat " ++ thingToName item
+    { name = "Eat " ++ Debug.toString item
     , requirements =
         [ Consume 1 item
         ]
