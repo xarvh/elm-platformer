@@ -83,7 +83,7 @@ enjoymentToFloat enjoyment =
 
 enjoymentBias : Process -> Enjoyment -> Float
 enjoymentBias process enjoyment =
-    0.6 * enjoymentToFloat enjoymentToFloat + 0.4 * enjoymentToFloat process.enjoymentBias
+    0.6 * enjoymentToFloat enjoyment + 0.4 * enjoymentToFloat process.enjoymentBias
 
 
 type Effort
@@ -110,18 +110,31 @@ productEquality a b =
 
 
 productPriority : Person -> Product -> Float
-productPriority character resource =
-    character.knownProcesses
+productPriority person resource =
+    person.knownProcesses
         |> List.filter (\{ enjoyment, process } -> List.any (productEquality resource) process.products)
-        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority character process)
+        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority person process)
         |> List.sum
 
 
 processPriority : Person -> Process -> Float
-processPriority character process =
+processPriority person process =
     process.requirements
-        |> List.map (\{ qty, resource } -> qty * productPriority character resource)
+        |> List.map (requirementPriority person)
         |> List.sum
+
+
+requirementPriority : Person -> Requirement -> Float
+requirementPriority person requirement =
+    case requirement of
+        Consume n item ->
+            toFloat n * productPriority person (Produce 1 item)
+
+        Use item ->
+            productPriority person (Produce 1 item)
+
+        FromTerrain terrain ->
+            productPriority person (ToTerrain terrain)
 
 
 
