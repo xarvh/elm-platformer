@@ -1,4 +1,35 @@
-module Main exposing (..)
+module Valley exposing (..)
+
+
+type alias World =
+    { people : List Person
+    , terrain : Terrain
+
+    -- Storage
+    , strawberries : Int
+    , seeds : Int
+    , wood : Int
+    , spades : Int
+
+    --
+    -- TODO something about forageable strawberries?
+    }
+
+
+getStorage : World -> Item -> Int
+getStorage world item =
+    case item of
+        Strawberry ->
+            world.strawberries
+
+        Seeds ->
+            world.seeds
+
+        Wood ->
+            world.wood
+
+        Spade ->
+            world.spades
 
 
 type Duration
@@ -109,32 +140,39 @@ productEquality a b =
             a == b
 
 
-productPriority : Person -> Product -> Float
-productPriority person resource =
+productPriority : World -> Person -> Product -> Float
+productPriority world person resource =
     person.knownProcesses
         |> List.filter (\{ enjoyment, process } -> List.any (productEquality resource) process.products)
-        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority person process)
+        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority world person process)
         |> List.sum
 
 
-processPriority : Person -> Process -> Float
-processPriority person process =
+processPriority : World -> Person -> Process -> Float
+processPriority world person process =
     process.requirements
-        |> List.map (requirementPriority person)
+        |> List.map (requirementPriority world person)
         |> List.sum
 
 
-requirementPriority : Person -> Requirement -> Float
-requirementPriority person requirement =
+requirementPriority : World -> Person -> Requirement -> Float
+requirementPriority world person requirement =
     case requirement of
         Consume n item ->
-            toFloat n * productPriority person (Produce 1 item)
+            let
+                t =
+                    n - getStorage world item
+            in
+            toFloat t * productPriority world person (Produce 1 item)
 
         Use item ->
-            productPriority person (Produce 1 item)
+            productPriority world person (Produce 1 item)
 
         FromTerrain terrain ->
-            productPriority person (ToTerrain terrain)
+            if world.terrain == terrain then
+                0
+            else
+                productPriority world person (ToTerrain terrain)
 
 
 
@@ -242,3 +280,35 @@ processes =
       , requiredSkills = []
       }
     ]
+
+
+
+--- test
+
+
+testPerson : Person
+testPerson =
+    { name = "test person"
+    , knownProcesses = processes |> List.map (\p -> { enjoyment = Meh, process = p })
+    }
+
+
+testWorld : World
+testWorld =
+    { people = [ testPerson ]
+    , terrain = Raw
+    , strawberries = 0
+    , seeds = 0
+    , wood = 0
+    , spades = 0
+    }
+
+all =
+    processes
+      |> List.map show
+
+show process =
+  let
+      s = processPriority testWorld testPerson process
+  in
+      Debug.log process.name s
