@@ -16,22 +16,6 @@ type alias World =
     }
 
 
-getStorage : World -> Item -> Int
-getStorage world item =
-    case item of
-        Strawberry ->
-            world.strawberries
-
-        Seeds ->
-            world.seeds
-
-        Wood ->
-            world.wood
-
-        Spade ->
-            world.spades
-
-
 type Duration
     = Instant
     | OneHour
@@ -74,12 +58,18 @@ type Skill
     | Cultivating
 
 
+type alias ProcessAndEnjoyment =
+    ( Process, Enjoyment )
+
+
 type alias Person =
     { name : String
-    , knownProcesses : List { enjoyment : Enjoyment, process : Process }
+    , knownProcesses : List ProcessAndEnjoyment
     }
 
 
+{-| Rename to `Action`?
+-}
 type alias Process =
     { name : String
     , requirements : List Requirement
@@ -97,6 +87,32 @@ type Enjoyment
     = Enjoyable
     | Meh
     | Unenjoyable
+
+
+type Effort
+    = Intense
+    | Light
+    | Negligible
+
+
+
+--
+
+
+getStorage : World -> Item -> Int
+getStorage world item =
+    case item of
+        Strawberry ->
+            world.strawberries
+
+        Seeds ->
+            world.seeds
+
+        Wood ->
+            world.wood
+
+        Spade ->
+            world.spades
 
 
 enjoymentToFloat : Enjoyment -> Float
@@ -117,12 +133,6 @@ enjoymentBias process enjoyment =
     0.6 * enjoymentToFloat enjoyment + 0.4 * enjoymentToFloat process.enjoymentBias
 
 
-type Effort
-    = Intense
-    | Light
-    | Negligible
-
-
 
 --
 
@@ -140,39 +150,44 @@ productEquality a b =
             a == b
 
 
-productPriority : World -> Person -> Product -> Float
-productPriority world person resource =
-    person.knownProcesses
-        |> List.filter (\{ enjoyment, process } -> List.any (productEquality resource) process.products)
-        |> List.map (\{ enjoyment, process } -> enjoymentBias process enjoyment * processPriority world person process)
+productPriority : World -> List ProcessAndEnjoyment -> Product -> Float
+productPriority world knownProcesses resource =
+    knownProcesses
+        |> List.filter (\( process, enjoyment ) -> List.any (productEquality resource) process.products)
+        |> List.map (\( process, enjoyment ) -> enjoymentBias process enjoyment * processPriority world knownProcesses process)
         |> List.sum
 
 
-processPriority : World -> Person -> Process -> Float
-processPriority world person process =
+processPriority : World -> List ProcessAndEnjoyment -> Process -> Float
+processPriority world allProcesses process =
+    let
+        -- Prevent infinite recursion
+        availableProcesses =
+            List.filter (\( p, e ) -> p /= process) allProcesses
+    in
     process.requirements
-        |> List.map (requirementPriority world person)
+        |> List.map (requirementPriority world availableProcesses)
         |> List.sum
 
 
-requirementPriority : World -> Person -> Requirement -> Float
-requirementPriority world person requirement =
+requirementPriority : World -> List ProcessAndEnjoyment -> Requirement -> Float
+requirementPriority world knownProcesses requirement =
     case requirement of
         Consume n item ->
             let
                 t =
                     n - getStorage world item
             in
-            toFloat t * productPriority world person (Produce 1 item)
+            toFloat t * productPriority world knownProcesses (Produce 1 item)
 
         Use item ->
-            productPriority world person (Produce 1 item)
+            productPriority world knownProcesses (Produce 1 item)
 
         FromTerrain terrain ->
             if world.terrain == terrain then
                 0
             else
-                productPriority world person (ToTerrain terrain)
+                productPriority world knownProcesses (ToTerrain terrain)
 
 
 
@@ -197,8 +212,8 @@ eatable satisfaction item =
     }
 
 
-processes : List Process
-processes =
+testProcesses : List Process
+testProcesses =
     [ eatable
         1
         Strawberry
@@ -289,7 +304,7 @@ processes =
 testPerson : Person
 testPerson =
     { name = "test person"
-    , knownProcesses = processes |> List.map (\p -> { enjoyment = Meh, process = p })
+    , knownProcesses = testProcesses |> List.map (\p -> ( p, Meh ))
     }
 
 
@@ -303,12 +318,14 @@ testWorld =
     , spades = 0
     }
 
+
 all =
-    processes
-      |> List.map show
+    List.map show testProcesses
+
 
 show process =
-  let
-      s = processPriority testWorld testPerson process
-  in
-      Debug.log process.name s
+    let
+        s =
+            processPriority testWorld testPerson.knownProcesses process
+    in
+    Debug.log process.name s
